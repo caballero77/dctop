@@ -5,20 +5,13 @@ import (
 	"dctop/internal/docker"
 	"dctop/internal/ui"
 	"fmt"
-	"net/http"
 	"os"
-
-	_ "net/http/pprof"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/termenv"
 )
 
 func main() {
-	go func() {
-		http.ListenAndServe("localhost:8080", nil)
-	}()
-
 	composeFilePath := os.Args[1]
 
 	config, theme, err := configuration.NewConfiguration()
