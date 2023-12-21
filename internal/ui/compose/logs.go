@@ -21,6 +21,8 @@ type LogsAddedMsg struct {
 	LogType LogType
 }
 
+type CloseLogsMsg struct{}
+
 type logs struct {
 	box             common.BoxWithBorders
 	stdoutText      tea.Model
@@ -33,9 +35,10 @@ type logs struct {
 	width  int
 	height int
 
-	done    chan bool
-	updates chan LogsAddedMsg
-	open    bool
+	done     chan bool
+	updates  chan LogsAddedMsg
+	open     bool
+	selected bool
 }
 
 func newLogs(service docker.ComposeService) logs {
@@ -97,18 +100,19 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case CloseLogsMsg:
+		model, cmd = model.close()
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case tea.KeyMsg:
-		if model.open {
+		if model.selected {
 			switch msg.Type {
 			case tea.KeyEsc:
-				model.open = false
-				close(model.done)
-
-				model.stdoutText, cmd = model.stdoutText.Update(common.ClearTextBoxMsg{})
+				model, cmd = model.close()
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
-
 				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Containers} })
 			case tea.KeyUp:
 				if model.selectedLogType == Stdout {
@@ -152,6 +156,8 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		cmds = append(cmds, model.waitForLogs())
+	case common.FocusTabChangedMsg:
+		model.selected = msg.Tab == common.Logs
 	case common.StartListenningLogsMsg:
 		if !model.open {
 			model.open = true
@@ -193,6 +199,29 @@ func (model logs) View() string {
 	}
 
 	return model.box.Render(labels, legends, text, model.open)
+}
+
+func (model logs) close() (logs, tea.Cmd) {
+	if !model.open {
+		return model, nil
+	}
+	model.open = false
+	close(model.done)
+
+	cmds := make([]tea.Cmd, 0)
+	var cmd tea.Cmd
+
+	model.stdoutText, cmd = model.stdoutText.Update(common.ClearTextBoxMsg{})
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	model.stderrText, cmd = model.stderrText.Update(common.ClearTextBoxMsg{})
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	return model, tea.Batch(cmds...)
 }
 
 func (model logs) waitForLogs() tea.Cmd {

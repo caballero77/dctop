@@ -83,7 +83,12 @@ func (model Compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	if msg, ok := msg.(common.SizeChangeMsq); ok {
+	switch msg := msg.(type) {
+	case common.FocusTabChangedMsg:
+		if msg.Tab == common.Compose {
+			cmds = append(cmds, func() tea.Msg { return CloseLogsMsg{} })
+		}
+	case common.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 
