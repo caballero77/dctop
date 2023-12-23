@@ -1,6 +1,7 @@
 package common
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/utils/slices"
 	utils_strings "dctop/internal/utils/strings"
 	"errors"
@@ -17,30 +18,51 @@ type Table struct {
 	getSizes         func(int) []int
 }
 
-func NewTable(getSizes func(int) []int) *Table {
-	bodyCellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9"))
+func NewTable(getSizes func(int) []int, theme configuration.Theme) *Table {
+	headerCellStyle := lipgloss.
+		NewStyle().
+		Foreground(theme.GetColor("header.foreground")).
+		Background(theme.GetColor("header.background"))
+
+	bodyCellStyle := lipgloss.
+		NewStyle().
+		Foreground(theme.GetColor("row.plain.foreground")).
+		Background(theme.GetColor("row.plain.background"))
+
+	selectedCellStyle := lipgloss.
+		NewStyle().
+		Foreground(theme.GetColor("row.selected.foreground")).
+		Background(theme.GetColor("row.selected.background"))
+
+	scrollStyle := lipgloss.
+		NewStyle().
+		Foreground(theme.GetColor("scroll.foreground")).
+		Background(theme.GetColor("scroll.background"))
+
 	return &Table{
-		headerCellStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
+		headerCellStyle:  headerCellStyle,
 		bodyCellStyle:    bodyCellStyle,
-		selectedRowStyle: bodyCellStyle.Copy().Background(lipgloss.Color("#434C5E")),
-		scrollStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
+		selectedRowStyle: selectedCellStyle,
+		scrollStyle:      scrollStyle,
 		getSizes:         getSizes,
 	}
 }
 
 func (table *Table) Render(headerCells []string, rowCells [][]string, width, selected, scrollPosition, height int) (string, error) {
-	scrollBar := strings.Repeat(" \n", len(rowCells))
 	width -= 3
 	height--
 
+	var scrollBar string
 	if height > 0 && len(rowCells) > height {
 		pos := int(float64(scrollPosition) * float64(height) / float64(len(rowCells)-height))
-		newScrollBar, err := utils_strings.ReplaceAtIndex(strings.Repeat("\n", height), table.scrollStyle.Render("█"), pos)
+		newScrollBar, err := utils_strings.ReplaceAtIndex(strings.Repeat("\n", height), "█", pos)
 		if err != nil {
 			return "", err
 		}
-		scrollBar = newScrollBar
+		scrollBar = table.scrollStyle.Render(newScrollBar)
 		rowCells = rowCells[scrollPosition : scrollPosition+height]
+	} else {
+		scrollBar = table.scrollStyle.Render(strings.Repeat(" \n", len(rowCells)))
 	}
 
 	size := table.getSizes(width)

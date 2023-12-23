@@ -1,0 +1,115 @@
+background: "#2E3440"
+containers:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  legend:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  table:
+    header:
+      foreground: "#8FBCBB"
+      background: "#2E3440"
+    row:
+      plain:
+        foreground: "#D8DEE9"
+        background: "#2E3440"
+      selected:
+        foreground: "#D8DEE9"
+        background: "#434C5E"
+    scroll:
+      background: "#2E3440"
+      foreground: "#D8DEE9"
+
+processes:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  table:
+    header:
+      foreground: "#8FBCBB"
+      background: "#2E3440"
+    row:
+      plain:
+        foreground: "#D8DEE9"
+        background: "#2E3440"
+      selected:
+        foreground: "#D8DEE9"
+        background: "#434C5E"
+    scroll:
+      background: "#2E3440"
+      foreground: "#D8DEE9"
+
+file:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+
+
+logs:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  legend:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+
+cpu:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  legend:
+    plain: "#434C5E"
+    shortcut: "#5E81AC"
+  plot: "#81A1C1"
+
+memory:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  legend:
+    plain: "#434C5E"
+    shortcut: "#5E81AC"
+  plot: "#81A1C1"
+
+network:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  legend:
+    plain: "#434C5E"
+    shortcut: "#5E81AC"
+  plot: "#81A1C1"
+
+io:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  legend:
+    plain: "#434C5E"
+    shortcut: "#5E81AC"
+  plot: "#81A1C1"

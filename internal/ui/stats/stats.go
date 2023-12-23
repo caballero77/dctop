@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/ui/common"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,12 +18,12 @@ type Stats struct {
 	height int
 }
 
-func NewStats() Stats {
+func NewStats(theme configuration.Theme) Stats {
 	return Stats{
-		networkModel:     newNetwork(),
-		ioStatsModel:     newIO(),
-		cpuStatsModel:    newCPU(),
-		memoryStatsModel: newMemory(),
+		networkModel:     newNetwork(theme.Sub("network")),
+		ioStatsModel:     newIO(theme.Sub("io")),
+		cpuStatsModel:    newCPU(theme.Sub("cpu")),
+		memoryStatsModel: newMemory(theme.Sub("memory")),
 	}
 }
 

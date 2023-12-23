@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"dctop/internal/utils/queues"
@@ -26,26 +27,12 @@ type cpu struct {
 	height int
 }
 
-func newCPU() cpu {
-	border := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-	borderStyle := lipgloss.Color("#434C5E")
-	focusBorderStyle := lipgloss.Color("#434C5E")
-
+func newCPU(theme configuration.Theme) cpu {
 	return cpu{
-		box: common.NewBoxWithLabel(border, borderStyle, focusBorderStyle),
-		plotStyles: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#81A1C1")),
-		legendStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#434C5E")),
-		labelStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
+		box:         common.NewBoxWithLabel(theme.Sub("border")),
+		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
+		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
+		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
 
 		cpuUsages:          make(map[string]*queues.Queue[float64]),
 		prevContainerStats: make(map[string]docker.ContainerStats),

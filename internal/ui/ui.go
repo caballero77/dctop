@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"dctop/internal/ui/compose"
@@ -12,7 +13,7 @@ import (
 )
 
 type UI struct {
-	theme       *viper.Viper
+	theme       configuration.Theme
 	config      *viper.Viper
 	stats       tea.Model
 	compose     tea.Model
@@ -23,11 +24,12 @@ type UI struct {
 	height int
 }
 
-func NewUI(config, theme *viper.Viper, service *docker.ComposeService) UI {
+func NewUI(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) UI {
+
 	return UI{
 		theme:  theme,
 		config: config,
-		stats:  stats.NewStats(),
+		stats:  stats.NewStats(theme),
 
 		compose:     compose.New(config, theme, service),
 		selectedTab: common.Containers,

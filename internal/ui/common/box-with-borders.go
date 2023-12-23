@@ -1,6 +1,7 @@
 package common
 
 import (
+	"dctop/internal/configuration"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -12,7 +13,19 @@ type BoxWithBorders struct {
 	focusColor lipgloss.Color
 }
 
-func NewBoxWithLabel(border lipgloss.Border, color, focusColor lipgloss.Color) *BoxWithBorders {
+func NewBoxWithLabel(theme configuration.Theme) *BoxWithBorders {
+	border := lipgloss.Border{
+		Top:         "─",
+		Bottom:      "─",
+		Left:        "│",
+		Right:       "│",
+		TopLeft:     "╭",
+		TopRight:    "╮",
+		BottomLeft:  "╰",
+		BottomRight: "╯",
+	}
+	color := theme.GetColor("plain")
+	focusColor := theme.GetColor("focus")
 	return &BoxWithBorders{
 		border:     border,
 		color:      color,

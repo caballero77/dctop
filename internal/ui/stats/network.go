@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	memory_utils "dctop/internal/utils/memory"
@@ -30,26 +31,12 @@ type network struct {
 	height int
 }
 
-func newNetwork() network {
-	border := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-	borderStyle := lipgloss.Color("#434C5E")
-	focusBorderStyle := lipgloss.Color("#8FBCBB")
-
+func newNetwork(theme configuration.Theme) network {
 	return network{
-		box: common.NewBoxWithLabel(border, borderStyle, focusBorderStyle),
-		plotStyles: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#81A1C1")),
-		labelStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
-		legendStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#434C5E")),
+		box:         common.NewBoxWithLabel(theme.Sub("border")),
+		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
+		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
+		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
 		networks:    make(map[string]ContainerNetworks),
 		scaling:     []int{15, 25, 35, 45, 55, 65, 75, 100},
 	}

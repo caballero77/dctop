@@ -3,13 +3,13 @@ package configuration
 import "github.com/spf13/viper"
 
 var (
-	ContainersListHeigth = "containers_list_height"
-	ProcessesListHeight  = "processes_list_height"
-	Theme                = "theme"
+	ContainersListHeigthName = "containers_list_height"
+	ProcessesListHeightName  = "processes_list_height"
+	ThemeName                = "theme"
 )
 
 func generalConfigDefaults(config *viper.Viper) {
-	config.SetDefault(ContainersListHeigth, 10)
-	config.SetDefault(ProcessesListHeight, 10)
-	config.SetDefault(Theme, "nord")
+	config.SetDefault(ContainersListHeigthName, 10)
+	config.SetDefault(ProcessesListHeightName, 10)
+	config.SetDefault(ThemeName, "nord")
 }

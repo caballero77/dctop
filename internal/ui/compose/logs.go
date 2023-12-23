@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"fmt"
@@ -24,13 +25,15 @@ type LogsAddedMsg struct {
 type CloseLogsMsg struct{}
 
 type logs struct {
-	box             common.BoxWithBorders
-	stdoutText      tea.Model
-	stderrText      tea.Model
-	selectedLogType LogType
-	labelStyle      lipgloss.Style
-	legendStyle     lipgloss.Style
-	service         docker.ComposeService
+	box                 common.BoxWithBorders
+	stdoutText          tea.Model
+	stderrText          tea.Model
+	selectedLogType     LogType
+	labelStyle          lipgloss.Style
+	labeShortcutStyle   lipgloss.Style
+	legendStyle         lipgloss.Style
+	legendShortcutStyle lipgloss.Style
+	service             docker.ComposeService
 
 	width  int
 	height int
@@ -41,30 +44,27 @@ type logs struct {
 	selected bool
 }
 
-func newLogs(service docker.ComposeService) logs {
-	border := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-	borderStyle := lipgloss.Color("#434C5E")
-	focusBorderStyle := lipgloss.Color("#8FBCBB")
+func newLogs(service docker.ComposeService, theme configuration.Theme) logs {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
+
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
+	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
+
+	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
+	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
+
 	return logs{
-		stdoutText:      common.NewTextBox("", style),
-		stderrText:      common.NewTextBox("", style),
-		selectedLogType: Stdout,
-		box:             *common.NewBoxWithLabel(border, borderStyle, focusBorderStyle),
-		labelStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
-		legendStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("#8FBCBB")),
-		service:         service,
-		updates:         make(chan LogsAddedMsg),
-		open:            false,
+		stdoutText:          common.NewTextBox("", style),
+		stderrText:          common.NewTextBox("", style),
+		selectedLogType:     Stdout,
+		box:                 *common.NewBoxWithLabel(theme.Sub("border")),
+		labelStyle:          labelStyle,
+		labeShortcutStyle:   labeShortcutStyle,
+		legendShortcutStyle: legendShortcutStyle,
+		legendStyle:         legendStyle,
+		service:             service,
+		updates:             make(chan LogsAddedMsg),
+		open:                false,
 	}
 }
 
@@ -187,8 +187,8 @@ func (model logs) View() string {
 	if !model.open {
 		return ""
 	}
-	labels := []string{model.labelStyle.Render(fmt.Sprintf("Logs: %s", model.selectedLogType))}
-	legends := []string{model.legendStyle.Render("¹stdout ²stderr")}
+	labels := []string{model.label()}
+	legends := []string{model.legend()}
 
 	var text string
 
@@ -199,6 +199,25 @@ func (model logs) View() string {
 	}
 
 	return model.box.Render(labels, legends, text, model.open)
+}
+
+func (model logs) label() string {
+	return model.labeShortcutStyle.Render("L") + model.labelStyle.Render(fmt.Sprintf("ogs: %s", model.selectedLogType))
+}
+
+func (model logs) legend() string {
+	var stdout string
+	var stderr string
+
+	if model.selectedLogType == Stdout {
+		stdout = model.legendShortcutStyle.Copy().Bold(true).Render("¹") + model.legendStyle.Copy().Bold(true).Render("stdout")
+		stderr = model.legendShortcutStyle.Render("²") + model.legendStyle.Render("stderr")
+	} else {
+		stdout = model.legendShortcutStyle.Render("¹") + model.legendStyle.Render("stdout")
+		stderr = model.legendShortcutStyle.Copy().Bold(true).Render("²") + model.legendStyle.Copy().Bold(true).Render("stderr")
+	}
+
+	return stdout + " " + stderr
 }
 
 func (model logs) close() (logs, tea.Cmd) {

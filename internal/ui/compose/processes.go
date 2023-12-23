@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"dctop/internal/utils/slices"
@@ -10,9 +11,8 @@ import (
 )
 
 type processesList struct {
-	box        *common.BoxWithBorders
-	labelStyle lipgloss.Style
-	table      *common.Table
+	box   *common.BoxWithBorders
+	table *common.Table
 
 	containerID       string
 	processes         []docker.Process
@@ -23,35 +23,27 @@ type processesList struct {
 
 	width  int
 	height int
+
+	label string
 }
 
-func newProcessesList(processesListSize int) processesList {
-	border := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-	borderStyle := lipgloss.Color("#434C5E")
-	focusBorderStyle := lipgloss.Color("#8FBCBB")
-
+func newProcessesList(processesListSize int, theme configuration.Theme) processesList {
 	getColumnSizes := func(width int) []int {
 		return []int{7, 7, width - 39, 8, 10, 5}
 	}
 
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
+	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
+
 	return processesList{
-		box:        common.NewBoxWithLabel(border, borderStyle, focusBorderStyle),
-		labelStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
-		table:      common.NewTable(getColumnSizes),
+		box:   common.NewBoxWithLabel(theme.Sub("border")),
+		table: common.NewTable(getColumnSizes, theme.Sub("table")),
 
 		selected:          0,
 		scrollPosition:    0,
 		processesListSize: processesListSize,
 		processes:         []docker.Process{},
+		label:             labeShortcutStyle.Render("P") + labelStyle.Render("rocesses"),
 	}
 }
 
@@ -96,9 +88,8 @@ func (model processesList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (model processesList) View() string {
 	if len(model.processes) == 0 {
-		label := model.labelStyle.Render("Processes")
 		return model.box.Render(
-			[]string{label},
+			[]string{model.label},
 			[]string{},
 			lipgloss.Place(model.width, model.height, lipgloss.Center, lipgloss.Center, "loading..."),
 			model.focus,
@@ -136,11 +127,8 @@ func (model processesList) View() string {
 	if err != nil {
 		panic(err)
 	}
-
-	label := model.labelStyle.Render("Processes")
-
 	return model.box.Render(
-		[]string{label},
+		[]string{model.label},
 		[]string{},
 		body,
 		model.focus,

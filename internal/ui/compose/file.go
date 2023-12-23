@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/ui/common"
 	"os"
 	"strings"
@@ -10,46 +11,35 @@ import (
 )
 
 type file struct {
-	box         common.BoxWithBorders
-	text        tea.Model
-	labelStyle  lipgloss.Style
-	legendStyle lipgloss.Style
+	box  common.BoxWithBorders
+	text tea.Model
 
 	width  int
 	height int
 
 	composeFile []string
 	focus       bool
+
+	label string
 }
 
-func newComposeFile(path string) file {
-	border := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-	borderStyle := lipgloss.Color("#434C5E")
-	focusBorderStyle := lipgloss.Color("#8FBCBB")
-
+func newComposeFile(path string, theme configuration.Theme) file {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		panic(err)
 	}
 	composeFile := string(bytes)
 
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
+	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
+
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
 
 	return file{
 		text:        common.NewTextBox(composeFile, style),
-		box:         *common.NewBoxWithLabel(border, borderStyle, focusBorderStyle),
-		labelStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
-		legendStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#8FBCBB")),
+		box:         *common.NewBoxWithLabel(theme.Sub("border")),
 		composeFile: strings.Split(composeFile, "\n"),
+		label:       labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),
 	}
 }
 
@@ -98,6 +88,5 @@ func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model file) View() string {
-	label := model.labelStyle.Render("Compose file")
-	return model.box.Render([]string{label}, []string{}, model.text.View(), model.focus)
+	return model.box.Render([]string{model.label}, []string{}, model.text.View(), model.focus)
 }

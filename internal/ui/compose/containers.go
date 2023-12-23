@@ -1,11 +1,11 @@
 package compose
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"dctop/internal/utils/maps"
 	"dctop/internal/utils/slices"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -15,10 +15,8 @@ import (
 )
 
 type containersList struct {
-	box         *common.BoxWithBorders
-	table       *common.Table
-	labelStyle  lipgloss.Style
-	legendStyle lipgloss.Style
+	box   *common.BoxWithBorders
+	table *common.Table
 
 	selected           int
 	scrollPosition     int
@@ -31,31 +29,25 @@ type containersList struct {
 
 	width  int
 	height int
+
+	label  string
+	legend string
 }
 
-func newContainersList(size int, service *docker.ComposeService, focus bool) containersList {
-	border := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-	borderStyle := lipgloss.Color("#434C5E")
-	focusBorderStyle := lipgloss.Color("#8FBCBB")
-
+func newContainersList(size int, theme configuration.Theme, service *docker.ComposeService, focus bool) containersList {
 	getColumnSizes := func(width int) []int {
 		return []int{15, width - 46, 10, 15, 6}
 	}
 
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
+	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
+
+	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
+	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
+
 	return containersList{
-		box:         common.NewBoxWithLabel(border, borderStyle, focusBorderStyle),
-		labelStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
-		table:       common.NewTable(getColumnSizes),
-		legendStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#8FBCBB")),
+		box:   common.NewBoxWithLabel(theme.Sub("border")),
+		table: common.NewTable(getColumnSizes, theme.Sub("table")),
 
 		containersListSize: size,
 		selected:           0,
@@ -65,6 +57,13 @@ func newContainersList(size int, service *docker.ComposeService, focus bool) con
 		service:            service,
 		containersMap:      make(map[string]*docker.ContainerInfo),
 		cpuUsages:          make(map[string]float64),
+
+		label: labeShortcutStyle.Render("C") + labelStyle.Render("ontainers"),
+		legend: legendShortcutStyle.Render("¹") + legendStyle.Render("stop") + " " +
+			legendShortcutStyle.Render("²") + legendStyle.Render("start") + " " +
+			legendShortcutStyle.Render("³") + legendStyle.Render("pause") + " " +
+			legendShortcutStyle.Render("⁴") + legendStyle.Render("unpause") + " " +
+			legendShortcutStyle.Render("l") + legendStyle.Render("ogs"),
 	}
 }
 
@@ -135,14 +134,14 @@ func (model containersList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyUp:
 			if model.focus {
-				model.SelectUp()
-				return model, model.GetContainerSelectedCmd()
+				model.selectUp()
+				return model, model.getContainerSelectedCmd()
 			}
 			return model, nil
 		case tea.KeyDown:
 			if model.focus {
-				model.SelectDown()
-				return model, model.GetContainerSelectedCmd()
+				model.selectDown()
+				return model, model.getContainerSelectedCmd()
 			}
 			return model, nil
 		}
@@ -177,7 +176,7 @@ func (model containersList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			containers := model.containers
 			sort.Slice(containers, func(i, j int) bool { return containers[i].InspectData.Name < containers[j].InspectData.Name })
 
-			return model, tea.Batch(model.GetContainerSelectedCmd(), waitForActivity(updates))
+			return model, tea.Batch(model.getContainerSelectedCmd(), waitForActivity(updates))
 		}
 	}
 
@@ -222,36 +221,20 @@ func (model containersList) View() string {
 		panic(err)
 	}
 
-	label := model.labelStyle.Render("Containers")
-
 	legend := ""
 	if model.focus {
-		legend = model.legendStyle.Render("¹stop ²start ³pause ⁴unpause")
+		legend = model.legend
 	}
 
 	return model.box.Render(
-		[]string{label},
+		[]string{model.label},
 		[]string{legend},
 		body,
 		model.focus,
 	)
 }
 
-func (model *containersList) AddContainer(container *docker.ContainerInfo) {
-	model.containers = append(model.containers, container)
-	containers := model.containers
-	sort.Slice(containers, func(i, j int) bool { return containers[i].InspectData.Name < containers[j].InspectData.Name })
-}
-
-func (model *containersList) Empty() bool {
-	return len(model.containers) == 0
-}
-
-func (model *containersList) SetFocus(focus bool) {
-	model.focus = focus
-}
-
-func (model *containersList) SelectUp() {
+func (model *containersList) selectUp() {
 	if model.selected == 0 {
 		model.selected = len(model.containers) - 1
 		if len(model.containers) > model.containersListSize && model.containersListSize > 0 {
@@ -265,7 +248,7 @@ func (model *containersList) SelectUp() {
 	}
 }
 
-func (model *containersList) SelectDown() {
+func (model *containersList) selectDown() {
 	if model.selected == len(model.containers)-1 {
 		model.selected = 0
 		if len(model.containers) > model.containersListSize && model.containersListSize > 0 {
@@ -279,15 +262,8 @@ func (model *containersList) SelectDown() {
 	}
 }
 
-func (model containersList) GetContainerSelectedCmd() tea.Cmd {
+func (model containersList) getContainerSelectedCmd() tea.Cmd {
 	return func() tea.Msg { return common.ContainerSelectedMsg{Container: *model.containers[model.selected]} }
-}
-
-func (model *containersList) GetSelectedContainer() (*docker.ContainerInfo, error) {
-	if len(model.containers) == 0 {
-		return nil, errors.New("containers list is empty")
-	}
-	return model.containers[model.selected], nil
 }
 
 func beautifyContainerName(name, stack string) string {

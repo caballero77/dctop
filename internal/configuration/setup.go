@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func NewConfiguration() (config, theme *viper.Viper, err error) {
+func NewConfiguration() (config *viper.Viper, theme Theme, err error) {
 	config = viper.New()
 
 	config.SetConfigName("config")
@@ -15,23 +15,25 @@ func NewConfiguration() (config, theme *viper.Viper, err error) {
 	config.AddConfigPath("/usr/share/dctop/")
 	err = config.ReadInConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, theme, err
 	}
 	generalConfigDefaults(config)
 
-	theme = viper.New()
+	themeConfig := viper.New()
 	themeName, ok := config.Get("theme").(string)
 	if !ok {
-		return nil, nil, errors.New("can't find theme name config")
+		return nil, theme, errors.New("can't find theme name config")
 	}
 
-	theme.SetConfigName("themes")
-	theme.SetConfigType("yaml")
-	theme.SetConfigFile(fmt.Sprintf("/usr/share/dctop/themes/%s.yaml", themeName))
-	err = theme.ReadInConfig()
+	themeConfig.SetConfigName("themes")
+	themeConfig.SetConfigType("yaml")
+	themeConfig.SetConfigFile(fmt.Sprintf("/usr/share/dctop/themes/%s.yaml", themeName))
+	err = themeConfig.ReadInConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, theme, err
 	}
+
+	theme = newTheme(themeConfig)
 
 	return config, theme, nil
 }

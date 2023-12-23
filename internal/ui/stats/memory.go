@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	memory_utils "dctop/internal/utils/memory"
@@ -27,26 +28,12 @@ type memory struct {
 	height int
 }
 
-func newMemory() memory {
-	border := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-	borderStyle := lipgloss.Color("#434C5E")
-	focusBorderStyle := lipgloss.Color("#434C5E")
-
+func newMemory(theme configuration.Theme) memory {
 	return memory{
-		box: common.NewBoxWithLabel(border, borderStyle, focusBorderStyle),
-		plotStyles: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#81A1C1")),
-		legendStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("#434C5E")),
-		labelStyle:         lipgloss.NewStyle().Foreground(lipgloss.Color("#D8DEE9")),
+		box:                common.NewBoxWithLabel(theme.Sub("border")),
+		plotStyles:         lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
+		labelStyle:         lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
+		legendStyle:        lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
 		prevContainerStats: make(map[string]docker.ContainerStats),
 		memoryUsages:       make(map[string]*queues.Queue[float64]),
 	}
