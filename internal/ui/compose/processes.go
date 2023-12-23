@@ -91,7 +91,7 @@ func (model processesList) View() string {
 		return model.box.Render(
 			[]string{model.label},
 			[]string{},
-			lipgloss.Place(model.width, model.height, lipgloss.Center, lipgloss.Center, "loading..."),
+			lipgloss.Place(model.width-2, model.height, lipgloss.Center, lipgloss.Center, "loading..."),
 			model.focus,
 		)
 	}

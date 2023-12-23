@@ -6,6 +6,7 @@ import (
 	"dctop/internal/ui/common"
 	"dctop/internal/ui/compose"
 	"dctop/internal/ui/stats"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -87,12 +88,23 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.width = msg.Width
 		model.height = msg.Height
 
-		model.stats, cmd = model.stats.Update(common.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height})
+		var stastMsg, composeMsg common.SizeChangeMsq
+
+		switch {
+		case model.height >= 30 && model.width >= 150:
+			stastMsg = common.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
+			composeMsg = common.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
+		case model.width < 150:
+			stastMsg = common.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
+			composeMsg = common.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
+		}
+
+		model.stats, cmd = model.stats.Update(stastMsg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
-		model.compose, cmd = model.compose.Update(common.SizeChangeMsq{Width: msg.Width / 2, Height: model.height})
+		model.compose, cmd = model.compose.Update(composeMsg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -102,9 +114,21 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model UI) View() string {
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		model.compose.View(),
-		model.stats.View(),
-	)
+	switch {
+	case model.height >= 30 && model.width >= 160:
+		return lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			model.compose.View(),
+			model.stats.View(),
+		)
+	case model.width < 150:
+		return lipgloss.JoinVertical(
+			lipgloss.Top,
+			model.compose.View(),
+			model.stats.View(),
+		)
+	default:
+		text := lipgloss.JoinVertical(lipgloss.Center, "Terminal size is too small", fmt.Sprintf("Width = %d Height = %d", model.width, model.height))
+		return lipgloss.Place(model.width, model.height, lipgloss.Center, lipgloss.Center, text)
+	}
 }
