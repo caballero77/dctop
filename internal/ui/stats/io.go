@@ -125,12 +125,27 @@ func (model io) RenderNetwork(queue *queues.Queue[int], label func(string) strin
 		panic(err)
 	}
 
-	legend := []string{
+	legends := []string{
 		model.legendStyle.Render(fmt.Sprintf("Total: %s", currentRx)),
 		model.legendStyle.Render(fmt.Sprintf("Max: %s/sec", maxRxChange)),
 	}
 
-	return model.box.Render([]string{label(currentChange)}, legend, plot, false)
+	length := 0
+	for _, legend := range legends {
+		length += lipgloss.Width(legend)
+	}
+	i := len(legends) - 1
+	for len(legends) != 0 && i >= 0 {
+		if length+2 >= width {
+			length -= len(legends[i])
+			legends = legends[:i]
+			i--
+		} else {
+			break
+		}
+	}
+
+	return model.box.Render([]string{label(currentChange)}, legends, plot, false)
 }
 
 func (model io) calculateScalingKoeficient(maxValue float64) float64 {
