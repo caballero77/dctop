@@ -1,0 +1,26 @@
+version: 3
+
+vars:
+  BINARY_NAME: dctop
+
+tasks:
+  build:
+    cmds:
+      - go build cmd/{{.BINARY_NAME}}/{{.BINARY_NAME}}.go
+    vars:
+      GOARCH: amd64
+      GOOS: linux
+  
+
+  status:
+    - test -f {{.BINARY_NAME}}
+  
+  publish:
+    - mkdir -p dist
+    - go build -o dist/bin/{{.BINARY_NAME}} cmd/{{.BINARY_NAME}}/{{.BINARY_NAME}}.go
+    - cp -rp ./themes/ ./dist/themes/
+    - cp -rp ./build/install-*.sh ./dist/
+    - chmod 755 ./dist/install-*.sh
+    - cp -rp ./build/uninstall-*.sh ./dist/
+    - chmod 755 ./dist/uninstall-*.sh
+  
