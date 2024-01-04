@@ -24,8 +24,8 @@ type network struct {
 	legendStyle lipgloss.Style
 	scaling     []int
 
-	containerID string
-	networks    map[string]ContainerNetworks
+	containerName string
+	networks      map[string]ContainerNetworks
 
 	width  int
 	height int
@@ -49,19 +49,19 @@ func (model network) Init() tea.Cmd {
 func (model network) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case common.ContainerSelectedMsg:
-		model.containerID = msg.Container.InspectData.ID
+		model.containerName = msg.Container.InspectData.Name
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
-		case "removing", "exited", "dead":
-			delete(model.networks, msg.Inspect.ID)
+		case "removing", "exited", "dead", "":
+			delete(model.networks, msg.Inspect.Name)
 		case "restarting", "paused", "running", "created":
-			network, ok := model.networks[msg.Inspect.ID]
+			network, ok := model.networks[msg.Inspect.Name]
 			if !ok {
 				network = ContainerNetworks{
 					IncomingNetwork: queues.New[int](),
 					OutgoingNetwork: queues.New[int](),
 				}
-				model.networks[msg.Inspect.ID] = network
+				model.networks[msg.Inspect.Name] = network
 			}
 			rx, tx := model.sumNetworkUsage(msg.Stats.Networks)
 			err := pushWithLimit(network.IncomingNetwork, rx, model.width*2)
@@ -81,7 +81,7 @@ func (model network) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model network) View() string {
-	network, ok := model.networks[model.containerID]
+	network, ok := model.networks[model.containerName]
 	width := model.width - 4
 	height := model.height - 2
 	if !ok || (network.IncomingNetwork.Len() == 0 && network.OutgoingNetwork.Len() == 0) {

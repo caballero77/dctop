@@ -18,7 +18,7 @@ type memory struct {
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 
-	containerID        string
+	containerName      string
 	prevContainerStats map[string]docker.ContainerStats
 	memoryUsages       map[string]*queues.Queue[float64]
 	memoryLimit        int
@@ -46,24 +46,24 @@ func (model memory) Init() tea.Cmd {
 func (model memory) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case common.ContainerSelectedMsg:
-		model.containerID = msg.Container.InspectData.ID
+		model.containerName = msg.Container.InspectData.Name
 		model.memoryLimit = msg.Container.StatsSnapshot.MemoryStats.Limit
 		model.cache = msg.Container.StatsSnapshot.MemoryStats.Stats.Cache
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
-		case "removing", "exited", "dead":
-			delete(model.memoryUsages, msg.Inspect.ID)
+		case "removing", "exited", "dead", "":
+			delete(model.memoryUsages, msg.Inspect.Name)
 		case "restarting", "paused", "running", "created":
-			usage, ok := model.memoryUsages[msg.Inspect.ID]
+			usage, ok := model.memoryUsages[msg.Inspect.Name]
 			if !ok {
 				usage = queues.New[float64]()
-				model.memoryUsages[msg.Inspect.ID] = usage
+				model.memoryUsages[msg.Inspect.Name] = usage
 			}
 			err := pushWithLimit(usage, float64(model.calculateMemoruUsage(msg.Stats)), model.width*2)
 			if err != nil {
 				panic(err)
 			}
-			model.prevContainerStats[msg.Inspect.ID] = msg.Stats
+			model.prevContainerStats[msg.Inspect.Name] = msg.Stats
 		}
 	case common.SizeChangeMsq:
 		model.width = msg.Width
@@ -73,7 +73,7 @@ func (model memory) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model memory) View() string {
-	memoryUsage, ok := model.memoryUsages[model.containerID]
+	memoryUsage, ok := model.memoryUsages[model.containerName]
 	width := model.width - 2
 	height := model.height - 2
 	if !ok || memoryUsage.Len() == 0 {

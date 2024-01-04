@@ -14,7 +14,7 @@ type processesList struct {
 	box   *common.BoxWithBorders
 	table *common.Table
 
-	containerID       string
+	containerName     string
 	processes         []docker.Process
 	processesListSize int
 	selected          int
@@ -43,7 +43,7 @@ func newProcessesList(processesListSize int, theme configuration.Theme) processe
 		scrollPosition:    0,
 		processesListSize: processesListSize,
 		processes:         []docker.Process{},
-		label:             labeShortcutStyle.Render("P") + labelStyle.Render("rocesses"),
+		label:             labeShortcutStyle.Render("T") + labelStyle.Render("op Processes"),
 	}
 }
 
@@ -77,9 +77,9 @@ func (model processesList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.height = msg.Height
 	case common.ContainerSelectedMsg:
 		model.processes = msg.Container.Processes
-		model.containerID = msg.Container.InspectData.ID
+		model.containerName = msg.Container.InspectData.Name
 	case docker.ContainerUpdateMsg:
-		if model.containerID == msg.Inspect.ID {
+		if model.containerName == msg.Inspect.Name {
 			model.processes = msg.Processes
 		}
 	}

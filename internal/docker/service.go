@@ -2,18 +2,22 @@ package docker
 
 import (
 	"context"
+	"dctop/internal/utils"
 	"dctop/internal/utils/maps"
 	"dctop/internal/utils/slices"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"gopkg.in/yaml.v3"
 )
@@ -27,8 +31,10 @@ type ComposeService struct {
 	prevStats       map[string]ContainerStats
 	stack           string
 	composeFilePath string
+	compose         Compose
 
-	containerUpdates chan ContainerUpdateMsg
+	containerUpdates    chan ContainerUpdateMsg
+	unsubscribeChannels map[string]chan struct{}
 }
 
 func ProvideComposeService(composeFilePath string) (*ComposeService, error) {
@@ -38,7 +44,7 @@ func ProvideComposeService(composeFilePath string) (*ComposeService, error) {
 		return nil, err
 	}
 
-	stack, containers, err := getStack(ctx, cli, composeFilePath)
+	stack, compose, containers, err := getStack(ctx, cli, composeFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -49,13 +55,15 @@ func ProvideComposeService(composeFilePath string) (*ComposeService, error) {
 	}
 
 	service := &ComposeService{
-		cli:              cli,
-		ctx:              ctx,
-		stack:            stack,
-		containers:       containersIds,
-		prevStats:        make(map[string]ContainerStats, len(containersIds)),
-		containerUpdates: nil,
-		composeFilePath:  composeFilePath,
+		cli:                 cli,
+		ctx:                 ctx,
+		stack:               stack,
+		containers:          containersIds,
+		prevStats:           make(map[string]ContainerStats, len(containersIds)),
+		containerUpdates:    nil,
+		composeFilePath:     composeFilePath,
+		compose:             compose,
+		unsubscribeChannels: make(map[string]chan struct{}),
 	}
 
 	return service, nil
@@ -87,6 +95,90 @@ func (service ComposeService) ContainerStop(id string) error {
 
 func (service ComposeService) ContainerStart(id string) error {
 	return service.cli.ContainerStart(service.ctx, id, types.ContainerStartOptions{})
+}
+
+func (service ComposeService) ContainerDown(name string) error {
+	name = utils.BeautifyContainerName(name, service.stack)
+	var composeServiceName string
+	if _, ok := service.compose.Services[name]; ok {
+		composeServiceName = name
+	} else {
+		for key, composeService := range service.compose.Services {
+			if name == composeService.Name {
+				composeServiceName = key
+			}
+		}
+	}
+	if composeServiceName == "" {
+		return fmt.Errorf("unknown service with name %s", name)
+	}
+
+	containers, err := service.cli.ContainerList(service.ctx, types.ContainerListOptions{Filters: filters.NewArgs(filters.KeyValuePair{Key: "name", Value: name})})
+	if err != nil {
+		return err
+	}
+
+	if len(containers) == 0 {
+		return fmt.Errorf("unknown service with name %s", composeServiceName)
+	}
+
+	close(service.unsubscribeChannels[containers[0].ID])
+
+	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "down", composeServiceName) // #nosec G204
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	service.containerUpdates <- ContainerUpdateMsg{
+		Inspect: types.ContainerJSON{
+			ContainerJSONBase: &types.ContainerJSONBase{
+				Name:  "/" + name,
+				State: &types.ContainerState{},
+			},
+			Config: &container.Config{
+				Image: containers[0].Image,
+			},
+			NetworkSettings: &types.NetworkSettings{},
+		},
+	}
+
+	return nil
+}
+
+func (service ComposeService) ContainerUp(name string) error {
+	name = utils.BeautifyContainerName(name, service.stack)
+	var composeServiceName string
+	if _, ok := service.compose.Services[name]; ok {
+		composeServiceName = name
+	} else {
+		for key, composeService := range service.compose.Services {
+			if name == composeService.Name {
+				composeServiceName = key
+			}
+		}
+	}
+	if composeServiceName == "" {
+		return fmt.Errorf("unknown service with name %s", name)
+	}
+	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "up", composeServiceName, "-d") // #nosec G204
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	containers, err := service.cli.ContainerList(service.ctx, types.ContainerListOptions{Filters: filters.NewArgs(filters.KeyValuePair{Key: "label", Value: fmt.Sprintf("com.docker.compose.project=%s", service.stack)})})
+	if err != nil {
+		return err
+	}
+
+	for _, container := range containers {
+		if _, ok := service.unsubscribeChannels[container.ID]; !ok {
+			_, err := service.startLiseningForUpdates(container.ID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (service ComposeService) GetContainerLogs(id, tail string) (stdout, stderr chan []byte, e chan error, done chan bool) {
@@ -180,94 +272,150 @@ func (service *ComposeService) GetContainerUpdates() (chan ContainerUpdateMsg, e
 	if service.containerUpdates != nil {
 		return service.containerUpdates, nil
 	}
-	var err error
-	service.containerUpdates, err = service.startListenningForStatistic()
+
+	service.containerUpdates = make(chan ContainerUpdateMsg, 100)
+
+	err := service.startListenningForStatistic()
 	if err != nil {
 		return nil, err
 	}
 	return service.containerUpdates, nil
 }
 
-func (service ComposeService) startListenningForStatistic() (chan ContainerUpdateMsg, error) {
-	updates := make(chan ContainerUpdateMsg, 100)
+func (service ComposeService) startListenningForStatistic() error {
+	namesOfCreatedContainers := make([]string, 0)
 	for i := 0; i < len(service.containers); i++ {
 		containerID := service.containers[i]
 
-		statisticsResponse, err := service.cli.ContainerStats(service.ctx, containerID, true)
+		name, err := service.startLiseningForUpdates(containerID)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		var newStats ContainerStats
-		decoder := json.NewDecoder(statisticsResponse.Body)
-
-		go func() {
-			for {
-				select {
-				case <-service.ctx.Done():
-					statisticsResponse.Body.Close()
-					return
-				default:
-					if err := decoder.Decode(&newStats); errors.Is(err, io.EOF) {
-						return
-					} else if err != nil {
-						panic(err)
-					}
-
-					inspectResponse, processes, err := service.getContainerInfo(containerID)
-					if err != nil {
-						panic(err)
-					}
-
-					update := ContainerUpdateMsg{
-						ID:        containerID,
-						Inspect:   inspectResponse,
-						Stats:     newStats,
-						Processes: processes,
-					}
-
-					updates <- update
-				}
-			}
-		}()
+		namesOfCreatedContainers = append(namesOfCreatedContainers, name)
 	}
-	return updates, nil
+
+	for key, composeService := range service.compose.Services {
+		var name string
+		if composeService.Name != "" {
+			name = "/" + composeService.Name
+		} else {
+			name = fmt.Sprintf("/%s-%s", service.stack, key)
+		}
+		fmt.Println(len(namesOfCreatedContainers), name)
+		if !slices.Contains(namesOfCreatedContainers, fmt.Sprintf("/%s", name)) {
+			service.containerUpdates <- ContainerUpdateMsg{
+				Inspect: types.ContainerJSON{
+					ContainerJSONBase: &types.ContainerJSONBase{
+						Name:  name,
+						State: &types.ContainerState{},
+					},
+					Config: &container.Config{
+						Image: composeService.Image,
+					},
+					NetworkSettings: &types.NetworkSettings{},
+				},
+			}
+		}
+	}
+	return nil
 }
 
-func getStack(ctx context.Context, cli *client.Client, composeFilePath string) (stack string, containers []types.Container, err error) {
+func (service ComposeService) startLiseningForUpdates(containerID string) (string, error) {
+	done := make(chan struct{})
+
+	service.unsubscribeChannels[containerID] = done
+
+	statisticsResponse, err := service.cli.ContainerStats(service.ctx, containerID, true)
+	if err != nil {
+		return "", err
+	}
+	var newStats ContainerStats
+	decoder := json.NewDecoder(statisticsResponse.Body)
+
+	inspectResponse, _, err := service.getContainerInfo(containerID)
+	if err != nil {
+		return "", err
+	}
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				statisticsResponse.Body.Close()
+				return
+			case <-service.ctx.Done():
+				statisticsResponse.Body.Close()
+				return
+			default:
+				if err := decoder.Decode(&newStats); errors.Is(err, io.EOF) {
+					return
+				} else if err != nil {
+					panic(err)
+				}
+
+				inspectResponse, processes, err := service.getContainerInfo(containerID)
+				if err != nil {
+					panic(err)
+				}
+
+				update := ContainerUpdateMsg{
+					ID:        containerID,
+					Inspect:   inspectResponse,
+					Stats:     newStats,
+					Processes: processes,
+				}
+
+				service.containerUpdates <- update
+			}
+		}
+	}()
+
+	return inspectResponse.Name, nil
+}
+
+func getStack(ctx context.Context, cli *client.Client, composeFilePath string) (stack string, compose Compose, containers []types.Container, err error) {
 	stack = filepath.Base(filepath.Dir(composeFilePath))
 
 	containers, err = cli.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
-		return "", nil, err
+		return "", compose, nil, err
+	}
+
+	bytes, err := os.ReadFile(composeFilePath)
+	if err != nil {
+		return "", compose, nil, err
+	}
+
+	err = yaml.Unmarshal(bytes, &compose)
+	if err != nil {
+		return "", compose, nil, err
 	}
 
 	filteredByStack := slices.Filter(containers, func(container types.Container) bool { return container.Labels[stackLabel] == stack })
 
 	if len(filteredByStack) != 0 {
-		return stack, filteredByStack, nil
+		return stack, compose, filteredByStack, nil
 	}
-
-	bytes, err := os.ReadFile(composeFilePath)
-	if err != nil {
-		return "", nil, err
-	}
-
-	var compose Compose
-
-	err = yaml.Unmarshal(bytes, &compose)
-	if err != nil {
-		return "", nil, err
-	}
-
-	stack = ""
 
 	filter := func(container types.Container) bool {
-		_, name := func() (string, string) {
-			parts := strings.Split(container.Names[0], "-")
-			return parts[0], parts[1]
-		}()
+		if containerStack, ok := container.Labels["com.docker.compose.project"]; ok {
+			return containerStack == stack
+		}
 
-		if _, err := slices.Find(maps.Keys(compose.Services), func(key string) bool { return key == name }); err == nil {
+		parts := strings.Split(container.Names[0], "-")
+
+		if len(parts) > 1 {
+			if parts[0] == stack {
+				return true
+			}
+
+			name := strings.Join(parts[1:], "-")
+			if _, err := slices.Find(maps.Keys(compose.Services), func(key string) bool { return key == name }); err == nil {
+				return true
+			}
+		}
+
+		if _, err := slices.Find(maps.Values(compose.Services), func(service Service) bool { return service.Name == container.Names[0] }); err == nil {
 			return true
 		}
 
@@ -276,9 +424,5 @@ func getStack(ctx context.Context, cli *client.Client, composeFilePath string) (
 
 	filteredByStack = slices.Filter(containers, filter)
 
-	if len(filteredByStack) == 0 {
-		return "", nil, errors.New("can't find containers associated with provided compose file")
-	}
-
-	return stack, filteredByStack, nil
+	return stack, compose, filteredByStack, nil
 }

@@ -43,7 +43,7 @@ func NewConfiguration() (config *viper.Viper, theme Theme, err error) {
 
 	themeConfig.SetConfigName("themes")
 	themeConfig.SetConfigType("yaml")
-	themeConfig.SetConfigFile(fmt.Sprintf("./%s/%s.yaml", filepath.Join(path, "themes"), themeName))
+	themeConfig.SetConfigFile(fmt.Sprintf("%s/%s.yaml", filepath.Join(path, "themes"), themeName))
 	err = themeConfig.ReadInConfig()
 	if err != nil {
 		if !errors.Is(err, viper.ConfigFileNotFoundError{}) {

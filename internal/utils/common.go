@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,4 +18,16 @@ func Debounce(duration time.Duration) func(func()) {
 		}
 		timer = time.AfterFunc(duration, action)
 	}
+}
+
+func BeautifyContainerName(name, stack string) string {
+	if strings.HasPrefix(name, "/") {
+		name = strings.TrimLeft(name, "/")
+	}
+
+	stackPrefix := fmt.Sprintf("%s-", stack)
+	if strings.HasPrefix(name, stackPrefix) {
+		name = strings.TrimLeft(name, stackPrefix)
+	}
+	return name
 }

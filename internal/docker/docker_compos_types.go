@@ -23,20 +23,23 @@ type ContainerInfo struct {
 }
 
 type Compose struct {
-	Version  string             `yml:"version"`
-	Services map[string]Service `yml:"services"`
-	Networks map[string]Network `yml:"networks"`
+	Version  string             `yaml:"version"`
+	Services map[string]Service `yaml:"services"`
+	Networks map[string]Network `yaml:"networks"`
 }
 
-type Service struct{}
+type Service struct {
+	Name  string `yaml:"container_name"`
+	Image string `yaml:"image"`
+}
 
 type Network struct {
-	Driver        string            `yml:"driver"`
-	DriverOptions map[string]string `yml:"driver_opts"`
-	Attachable    bool              `yml:"attachable"`
-	EnableIpv6    bool              `yml:"enable_ipv6"`
-	External      bool              `yml:"external"`
-	Internal      bool              `yml:"internal"`
-	Labels        map[string]string `yml:"labels"`
-	Name          string            `yml:"name"`
+	Driver        string            `yaml:"driver"`
+	DriverOptions map[string]string `yaml:"driver_opts"`
+	Attachable    bool              `yaml:"attachable"`
+	EnableIpv6    bool              `yaml:"enable_ipv6"`
+	External      bool              `yaml:"external"`
+	Internal      bool              `yaml:"internal"`
+	Labels        map[string]string `yaml:"labels"`
+	Name          string            `yaml:"name"`
 }

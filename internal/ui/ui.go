@@ -78,7 +78,7 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch string(msg.Runes) {
 			case "c":
 				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Containers} })
-			case "p":
+			case "t":
 				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Processes} })
 			case "f":
 				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Compose} })
@@ -91,7 +91,7 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var stastMsg, composeMsg common.SizeChangeMsq
 
 		switch {
-		case model.height >= 30 && model.width >= 150:
+		case model.height >= 30 && model.width >= 150 || true:
 			stastMsg = common.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
 			composeMsg = common.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
 		case model.width < 150:
@@ -115,7 +115,7 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (model UI) View() string {
 	switch {
-	case model.height >= 30 && model.width >= 160:
+	case model.height >= 30 && model.width >= 160 || true:
 		return lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			model.compose.View(),

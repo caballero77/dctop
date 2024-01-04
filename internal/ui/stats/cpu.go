@@ -19,7 +19,7 @@ type cpu struct {
 	legendStyle lipgloss.Style
 	scaling     []int
 
-	containerID        string
+	containerName      string
 	cpuUsages          map[string]*queues.Queue[float64]
 	prevContainerStats map[string]docker.ContainerStats
 
@@ -47,26 +47,26 @@ func (cpu) Init() tea.Cmd {
 func (model cpu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case common.ContainerSelectedMsg:
-		model.containerID = msg.Container.InspectData.ID
+		model.containerName = msg.Container.InspectData.Name
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
-		case "removing", "exited", "dead":
-			delete(model.prevContainerStats, msg.Inspect.ID)
-			delete(model.cpuUsages, msg.Inspect.ID)
+		case "removing", "exited", "dead", "":
+			delete(model.prevContainerStats, msg.Inspect.Name)
+			delete(model.cpuUsages, msg.Inspect.Name)
 		case "restarting", "paused", "running", "created":
-			prevStats, ok := model.prevContainerStats[msg.Inspect.ID]
+			prevStats, ok := model.prevContainerStats[msg.Inspect.Name]
 			if ok {
-				usage, ok := model.cpuUsages[msg.Inspect.ID]
+				usage, ok := model.cpuUsages[msg.Inspect.Name]
 				if !ok {
 					usage = queues.New[float64]()
-					model.cpuUsages[msg.Inspect.ID] = usage
+					model.cpuUsages[msg.Inspect.Name] = usage
 				}
 				err := pushWithLimit(usage, model.calculateCPUUsage(msg.Stats, prevStats), model.width*2)
 				if err != nil {
 					panic(err)
 				}
 			}
-			model.prevContainerStats[msg.Inspect.ID] = msg.Stats
+			model.prevContainerStats[msg.Inspect.Name] = msg.Stats
 		}
 	case common.SizeChangeMsq:
 		model.width = msg.Width
@@ -76,7 +76,7 @@ func (model cpu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model cpu) View() string {
-	cpuUsage, ok := model.cpuUsages[model.containerID]
+	cpuUsage, ok := model.cpuUsages[model.containerName]
 	width := model.width - 2
 	height := model.height - 2
 	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
