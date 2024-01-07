@@ -24,10 +24,10 @@ type Compose struct {
 
 func New(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) Compose {
 	return Compose{
-		containers:  newContainersList(config.GetInt(configuration.ContainersListHeigthName), theme.Sub("containers"), service, true),
+		containers:  newContainersList(config.GetInt(configuration.ContainersListHeigthName), theme.Sub("containers"), service),
 		processes:   newProcessesList(config.GetInt(configuration.ProcessesListHeightName), theme.Sub("processes")),
 		logs:        newLogs(*service, theme.Sub("logs")),
-		composeFile: newComposeFile(service.ComposeFilePath(), theme.Sub("file")),
+		composeFile: newComposeFile(service.ComposeFilePath(), theme.Sub("file"), service),
 		config:      config,
 	}
 }
@@ -35,6 +35,8 @@ func New(config *viper.Viper, theme configuration.Theme, service *docker.Compose
 func (model Compose) Init() tea.Cmd {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
+
+	cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Containers} })
 
 	cmd = model.containers.Init()
 	if cmd != nil {
@@ -92,24 +94,24 @@ func (model Compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.width = msg.Width
 		model.height = msg.Height
 
-		containersHeight := model.config.GetInt(configuration.ContainersListHeigthName)
+		containersHeight := model.config.GetInt(configuration.ContainersListHeigthName) + 3
 		model.containers, cmd = model.containers.Update(common.SizeChangeMsq{Width: msg.Width, Height: containersHeight})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
-		processesHeight := model.config.GetInt(configuration.ProcessesListHeightName)
+		processesHeight := model.config.GetInt(configuration.ProcessesListHeightName) + 3
 		model.processes, cmd = model.processes.Update(common.SizeChangeMsq{Width: msg.Width, Height: processesHeight})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
-		model.logs, cmd = model.logs.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - containersHeight - processesHeight - 4})
+		model.logs, cmd = model.logs.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - containersHeight - processesHeight - 2})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
-		model.composeFile, cmd = model.composeFile.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - containersHeight - processesHeight - 4})
+		model.composeFile, cmd = model.composeFile.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - containersHeight - processesHeight - 2})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}

@@ -2,6 +2,7 @@ package compose
 
 import (
 	"dctop/internal/configuration"
+	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"os"
 	"strings"
@@ -11,8 +12,9 @@ import (
 )
 
 type file struct {
-	box  common.BoxWithBorders
-	text tea.Model
+	box     common.BoxWithBorders
+	text    tea.Model
+	service *docker.ComposeService
 
 	width  int
 	height int
@@ -20,10 +22,11 @@ type file struct {
 	composeFile []string
 	focus       bool
 
-	label string
+	label  string
+	legend string
 }
 
-func newComposeFile(path string, theme configuration.Theme) file {
+func newComposeFile(path string, theme configuration.Theme, service *docker.ComposeService) file {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		panic(err)
@@ -33,13 +36,18 @@ func newComposeFile(path string, theme configuration.Theme) file {
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
 	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
 
+	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
+	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
+
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
 
 	return file{
 		text:        common.NewTextBox(composeFile, style),
 		box:         *common.NewBoxWithLabel(theme.Sub("border")),
+		service:     service,
 		composeFile: strings.Split(composeFile, "\n"),
 		label:       labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),
+		legend:      legendShortcutStyle.Render("u") + legendStyle.Render("p") + " " + legendShortcutStyle.Render("d") + legendStyle.Render("own"),
 	}
 }
 
@@ -80,13 +88,38 @@ func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
+			case tea.KeyRunes:
+				if !model.focus {
+					return model, tea.Batch(cmds...)
+				}
+				switch string(msg.Runes) {
+				case "u":
+					return model, func() tea.Msg {
+						err := model.service.ComposeUp()
+						if err != nil {
+							panic(err)
+						}
+						return nil
+					}
+				case "d":
+					return model, func() tea.Msg {
+						err := model.service.ComposeDown()
+						if err != nil {
+							panic(err)
+						}
+						return nil
+					}
+				}
 			}
 		}
 	}
-
 	return model, tea.Batch(cmds...)
 }
 
 func (model file) View() string {
-	return model.box.Render([]string{model.label}, []string{}, model.text.View(), model.focus)
+	legends := []string{}
+	if model.focus {
+		legends = []string{model.legend}
+	}
+	return model.box.Render([]string{model.label}, legends, model.text.View(), model.focus)
 }

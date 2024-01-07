@@ -70,6 +70,12 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case docker.ContainerMsg:
+		updates, err := model.service.GetContainerUpdates()
+		if err != nil {
+			panic(err)
+		}
+		cmds = append(cmds, waitForActivity(updates))
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
@@ -130,5 +136,11 @@ func (model UI) View() string {
 	default:
 		text := lipgloss.JoinVertical(lipgloss.Center, "Terminal size is too small", fmt.Sprintf("Width = %d Height = %d", model.width, model.height))
 		return lipgloss.Place(model.width, model.height, lipgloss.Center, lipgloss.Center, text)
+	}
+}
+
+func waitForActivity(sub chan docker.ContainerMsg) tea.Cmd {
+	return func() tea.Msg {
+		return <-sub
 	}
 }

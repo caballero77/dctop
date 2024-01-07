@@ -18,11 +18,10 @@ type memory struct {
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 
-	containerName      string
-	prevContainerStats map[string]docker.ContainerStats
-	memoryUsages       map[string]*queues.Queue[float64]
-	memoryLimit        int
-	cache              int
+	containerID  string
+	memoryUsages map[string]*queues.Queue[float64]
+	memoryLimit  int
+	cache        int
 
 	width  int
 	height int
@@ -30,12 +29,11 @@ type memory struct {
 
 func newMemory(theme configuration.Theme) memory {
 	return memory{
-		box:                common.NewBoxWithLabel(theme.Sub("border")),
-		plotStyles:         lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
-		labelStyle:         lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
-		legendStyle:        lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		prevContainerStats: make(map[string]docker.ContainerStats),
-		memoryUsages:       make(map[string]*queues.Queue[float64]),
+		box:          common.NewBoxWithLabel(theme.Sub("border")),
+		plotStyles:   lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
+		labelStyle:   lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
+		legendStyle:  lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
+		memoryUsages: make(map[string]*queues.Queue[float64]),
 	}
 }
 
@@ -46,25 +44,11 @@ func (model memory) Init() tea.Cmd {
 func (model memory) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case common.ContainerSelectedMsg:
-		model.containerName = msg.Container.InspectData.Name
+		model.containerID = msg.Container.InspectData.ID
 		model.memoryLimit = msg.Container.StatsSnapshot.MemoryStats.Limit
 		model.cache = msg.Container.StatsSnapshot.MemoryStats.Stats.Cache
-	case docker.ContainerUpdateMsg:
-		switch msg.Inspect.State.Status {
-		case "removing", "exited", "dead", "":
-			delete(model.memoryUsages, msg.Inspect.Name)
-		case "restarting", "paused", "running", "created":
-			usage, ok := model.memoryUsages[msg.Inspect.Name]
-			if !ok {
-				usage = queues.New[float64]()
-				model.memoryUsages[msg.Inspect.Name] = usage
-			}
-			err := pushWithLimit(usage, float64(model.calculateMemoruUsage(msg.Stats)), model.width*2)
-			if err != nil {
-				panic(err)
-			}
-			model.prevContainerStats[msg.Inspect.Name] = msg.Stats
-		}
+	case docker.ContainerMsg:
+		model = model.handleContainersUpdates(msg)
 	case common.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
@@ -72,12 +56,35 @@ func (model memory) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, nil
 }
 
+func (model memory) handleContainersUpdates(msg docker.ContainerMsg) memory {
+	switch msg := msg.(type) {
+	case docker.ContainerUpdateMsg:
+		switch msg.Inspect.State.Status {
+		case "removing", "exited", "dead", "":
+			delete(model.memoryUsages, msg.Inspect.ID)
+		case "restarting", "paused", "running", "created":
+			usage, ok := model.memoryUsages[msg.Inspect.ID]
+			if !ok {
+				usage = queues.New[float64]()
+				model.memoryUsages[msg.Inspect.ID] = usage
+			}
+			err := pushWithLimit(usage, float64(model.calculateMemoruUsage(msg.Stats)), model.width*2)
+			if err != nil {
+				panic(err)
+			}
+		}
+	case docker.ContainerRemoveMsg:
+		delete(model.memoryUsages, msg.ID)
+	}
+	return model
+}
+
 func (model memory) View() string {
-	memoryUsage, ok := model.memoryUsages[model.containerName]
+	memoryUsage, ok := model.memoryUsages[model.containerID]
 	width := model.width - 2
 	height := model.height - 2
 	if !ok || memoryUsage.Len() == 0 {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "test")), false)
+		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
 	memoryData := memoryUsage.ToArray()

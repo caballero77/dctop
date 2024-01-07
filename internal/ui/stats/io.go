@@ -24,8 +24,8 @@ type io struct {
 	legendStyle lipgloss.Style
 	scaling     []int
 
-	containerName string
-	ioUsages      map[string]containerIo
+	containerID string
+	ioUsages    map[string]containerIo
 
 	width  int
 	height int
@@ -49,19 +49,30 @@ func (model io) Init() tea.Cmd {
 func (model io) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case common.ContainerSelectedMsg:
-		model.containerName = msg.Container.InspectData.Name
+		model.containerID = msg.Container.InspectData.ID
+	case docker.ContainerMsg:
+		model = model.handleContainersUpdates(msg)
+	case common.SizeChangeMsq:
+		model.width = msg.Width
+		model.height = msg.Height
+	}
+	return model, nil
+}
+
+func (model io) handleContainersUpdates(msg docker.ContainerMsg) io {
+	switch msg := msg.(type) {
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
 		case "removing", "exited", "dead", "":
-			delete(model.ioUsages, msg.Inspect.Name)
+			delete(model.ioUsages, msg.Inspect.ID)
 		case "restarting", "paused", "running", "created":
-			network, ok := model.ioUsages[msg.Inspect.Name]
+			network, ok := model.ioUsages[msg.Inspect.ID]
 			if !ok {
 				network = containerIo{
 					IoRead:  queues.New[int](),
 					IoWrite: queues.New[int](),
 				}
-				model.ioUsages[msg.Inspect.Name] = network
+				model.ioUsages[msg.Inspect.ID] = network
 			}
 			read, write := model.getIoUsage(&msg.Stats.BlkioStats)
 			err := pushWithLimit(network.IoRead, read, model.width*2)
@@ -73,21 +84,22 @@ func (model io) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				panic(err)
 			}
 		}
-	case common.SizeChangeMsq:
-		model.width = msg.Width
-		model.height = msg.Height
+	case docker.ContainerRemoveMsg:
+		delete(model.ioUsages, msg.ID)
 	}
-	return model, nil
+	return model
 }
 
 func (model io) View() string {
 	width := model.width - 4
 	height := model.height - 2
-	ioUsage, ok := model.ioUsages[model.containerName]
+	ioUsage, ok := model.ioUsages[model.containerID]
 	if !ok || (ioUsage.IoRead.Len() == 0 && ioUsage.IoWrite.Len() == 0) {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "test")), false)
+		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
-	incoming := model.RenderNetwork(ioUsage.IoRead, func(current string) string { return model.labelStyle.Render(fmt.Sprintf("IO Read: %s/sec", current)) }, width/2, height)
+	incoming := model.RenderNetwork(ioUsage.IoRead, func(current string) string {
+		return model.labelStyle.Render(fmt.Sprintf("IO Read: %s/sec", current))
+	}, width/2, height)
 
 	outcoming := model.RenderNetwork(ioUsage.IoWrite, func(current string) string {
 		return model.labelStyle.Render(fmt.Sprintf("IO Write: %s/sec", current))
@@ -98,7 +110,7 @@ func (model io) View() string {
 
 func (model io) RenderNetwork(queue *queues.Queue[int], label func(string) string, width, height int) string {
 	if queue.Len() == 0 {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "test")), false)
+		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
 	total, err := queue.Head()

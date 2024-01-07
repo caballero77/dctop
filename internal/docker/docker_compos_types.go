@@ -4,11 +4,43 @@ import (
 	"github.com/docker/docker/api/types"
 )
 
+type ContainerMessageType string
+
+const (
+	Update ContainerMessageType = "update"
+	Add    ContainerMessageType = "add"
+	Remove ContainerMessageType = "remove"
+)
+
+type ContainerMsg interface {
+	Type() ContainerMessageType
+}
+
 type ContainerUpdateMsg struct {
 	ID        string
 	Stats     ContainerStats
 	Inspect   types.ContainerJSON
 	Processes []Process
+}
+
+func (msg ContainerUpdateMsg) Type() ContainerMessageType {
+	return Update
+}
+
+type ContainerCreateMsg struct {
+	ID string
+}
+
+func (msg ContainerCreateMsg) Type() ContainerMessageType {
+	return Add
+}
+
+type ContainerRemoveMsg struct {
+	ID string
+}
+
+func (msg ContainerRemoveMsg) Type() ContainerMessageType {
+	return Remove
 }
 
 type ComposeData struct {
@@ -29,8 +61,14 @@ type Compose struct {
 }
 
 type Service struct {
-	Name  string `yaml:"container_name"`
-	Image string `yaml:"image"`
+	Name   string `yaml:"container_name"`
+	Image  string `yaml:"image"`
+	Deploy Deploy `yaml:"deploy"`
+}
+
+type Deploy struct {
+	Mode     string `yaml:"mode"`
+	Replicas int    `yaml:"replicas"`
 }
 
 type Network struct {

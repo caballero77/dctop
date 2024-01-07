@@ -4,7 +4,8 @@ import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui"
-	"fmt"
+	"log"
+	"log/slog"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,6 +13,15 @@ import (
 )
 
 func main() {
+	file, err := os.OpenFile("logs.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer file.Close()
+
+	logger := slog.New(slog.NewTextHandler(file, nil))
+	slog.SetDefault(logger)
+
 	composeFilePath := os.Args[1]
 
 	config, theme, err := configuration.NewConfiguration()
@@ -31,9 +41,8 @@ func main() {
 
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithOutput(output))
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+		slog.Error("There's been an error", err)
 		output.SetBackgroundColor(backgroundColor)
-		os.Exit(1)
 	}
 
 	output.SetBackgroundColor(backgroundColor)

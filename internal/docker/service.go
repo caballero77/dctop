@@ -2,7 +2,6 @@ package docker
 
 import (
 	"context"
-	"dctop/internal/utils"
 	"dctop/internal/utils/maps"
 	"dctop/internal/utils/slices"
 	"encoding/binary"
@@ -14,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -27,14 +27,14 @@ var stackLabel = "com.docker.compose.project"
 type ComposeService struct {
 	cli             *client.Client
 	ctx             context.Context
-	containers      []string
-	prevStats       map[string]ContainerStats
+	containers      map[string]struct{}
 	stack           string
 	composeFilePath string
 	compose         Compose
 
-	containerUpdates    chan ContainerUpdateMsg
+	containerUpdates    chan ContainerMsg
 	unsubscribeChannels map[string]chan struct{}
+	stopSyncronization  chan struct{}
 }
 
 func ProvideComposeService(composeFilePath string) (*ComposeService, error) {
@@ -49,17 +49,16 @@ func ProvideComposeService(composeFilePath string) (*ComposeService, error) {
 		return nil, err
 	}
 
-	containersIds, err := slices.Map(containers, func(c types.Container) (string, error) { return c.ID, nil })
-	if err != nil {
-		return nil, err
+	containerIds := make(map[string]struct{}, len(containers))
+	for _, container := range containers {
+		containerIds[container.ID] = struct{}{}
 	}
 
 	service := &ComposeService{
 		cli:                 cli,
 		ctx:                 ctx,
 		stack:               stack,
-		containers:          containersIds,
-		prevStats:           make(map[string]ContainerStats, len(containersIds)),
+		containers:          containerIds,
 		containerUpdates:    nil,
 		composeFilePath:     composeFilePath,
 		compose:             compose,
@@ -97,85 +96,19 @@ func (service ComposeService) ContainerStart(id string) error {
 	return service.cli.ContainerStart(service.ctx, id, types.ContainerStartOptions{})
 }
 
-func (service ComposeService) ContainerDown(name string) error {
-	name = utils.BeautifyContainerName(name, service.stack)
-	var composeServiceName string
-	if _, ok := service.compose.Services[name]; ok {
-		composeServiceName = name
-	} else {
-		for key, composeService := range service.compose.Services {
-			if name == composeService.Name {
-				composeServiceName = key
-			}
-		}
-	}
-	if composeServiceName == "" {
-		return fmt.Errorf("unknown service with name %s", name)
-	}
-
-	containers, err := service.cli.ContainerList(service.ctx, types.ContainerListOptions{Filters: filters.NewArgs(filters.KeyValuePair{Key: "name", Value: name})})
-	if err != nil {
-		return err
-	}
-
-	if len(containers) == 0 {
-		return fmt.Errorf("unknown service with name %s", composeServiceName)
-	}
-
-	close(service.unsubscribeChannels[containers[0].ID])
-
-	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "down", composeServiceName) // #nosec G204
+func (service ComposeService) ComposeDown() error {
+	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "down") // #nosec G204
 	if err := cmd.Run(); err != nil {
 		return err
-	}
-	service.containerUpdates <- ContainerUpdateMsg{
-		Inspect: types.ContainerJSON{
-			ContainerJSONBase: &types.ContainerJSONBase{
-				Name:  "/" + name,
-				State: &types.ContainerState{},
-			},
-			Config: &container.Config{
-				Image: containers[0].Image,
-			},
-			NetworkSettings: &types.NetworkSettings{},
-		},
 	}
 
 	return nil
 }
 
-func (service ComposeService) ContainerUp(name string) error {
-	name = utils.BeautifyContainerName(name, service.stack)
-	var composeServiceName string
-	if _, ok := service.compose.Services[name]; ok {
-		composeServiceName = name
-	} else {
-		for key, composeService := range service.compose.Services {
-			if name == composeService.Name {
-				composeServiceName = key
-			}
-		}
-	}
-	if composeServiceName == "" {
-		return fmt.Errorf("unknown service with name %s", name)
-	}
-	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "up", composeServiceName, "-d") // #nosec G204
+func (service ComposeService) ComposeUp() error {
+	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "up", "-d") // #nosec G204
 	if err := cmd.Run(); err != nil {
 		return err
-	}
-
-	containers, err := service.cli.ContainerList(service.ctx, types.ContainerListOptions{Filters: filters.NewArgs(filters.KeyValuePair{Key: "label", Value: fmt.Sprintf("com.docker.compose.project=%s", service.stack)})})
-	if err != nil {
-		return err
-	}
-
-	for _, container := range containers {
-		if _, ok := service.unsubscribeChannels[container.ID]; !ok {
-			_, err := service.startLiseningForUpdates(container.ID)
-			if err != nil {
-				return err
-			}
-		}
 	}
 
 	return nil
@@ -268,77 +201,65 @@ func (service ComposeService) getContainerInfo(containerID string) (types.Contai
 	return inspectResponse, processes, nil
 }
 
-func (service *ComposeService) GetContainerUpdates() (chan ContainerUpdateMsg, error) {
+func (service *ComposeService) GetContainerUpdates() (chan ContainerMsg, error) {
 	if service.containerUpdates != nil {
 		return service.containerUpdates, nil
 	}
 
-	service.containerUpdates = make(chan ContainerUpdateMsg, 100)
+	service.containerUpdates = make(chan ContainerMsg, 10000)
 
 	err := service.startListenningForStatistic()
 	if err != nil {
 		return nil, err
 	}
+
+	service.stopSyncronization = make(chan struct{})
+
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				err := service.syncContainers()
+				if err != nil {
+					continue
+				}
+			case <-service.stopSyncronization:
+				return
+			}
+		}
+	}()
+
 	return service.containerUpdates, nil
 }
 
 func (service ComposeService) startListenningForStatistic() error {
-	namesOfCreatedContainers := make([]string, 0)
-	for i := 0; i < len(service.containers); i++ {
-		containerID := service.containers[i]
-
-		name, err := service.startLiseningForUpdates(containerID)
+	for id := range service.containers {
+		err := service.startLiseningForUpdates(id)
 		if err != nil {
 			return err
 		}
-		namesOfCreatedContainers = append(namesOfCreatedContainers, name)
 	}
 
-	for key, composeService := range service.compose.Services {
-		var name string
-		if composeService.Name != "" {
-			name = "/" + composeService.Name
-		} else {
-			name = fmt.Sprintf("/%s-%s", service.stack, key)
-		}
-		fmt.Println(len(namesOfCreatedContainers), name)
-		if !slices.Contains(namesOfCreatedContainers, fmt.Sprintf("/%s", name)) {
-			service.containerUpdates <- ContainerUpdateMsg{
-				Inspect: types.ContainerJSON{
-					ContainerJSONBase: &types.ContainerJSONBase{
-						Name:  name,
-						State: &types.ContainerState{},
-					},
-					Config: &container.Config{
-						Image: composeService.Image,
-					},
-					NetworkSettings: &types.NetworkSettings{},
-				},
-			}
-		}
-	}
 	return nil
 }
 
-func (service ComposeService) startLiseningForUpdates(containerID string) (string, error) {
+func (service *ComposeService) startLiseningForUpdates(containerID string) error {
 	done := make(chan struct{})
 
 	service.unsubscribeChannels[containerID] = done
 
 	statisticsResponse, err := service.cli.ContainerStats(service.ctx, containerID, true)
 	if err != nil {
-		return "", err
+		return err
 	}
 	var newStats ContainerStats
 	decoder := json.NewDecoder(statisticsResponse.Body)
 
-	inspectResponse, _, err := service.getContainerInfo(containerID)
-	if err != nil {
-		return "", err
-	}
-
 	go func() {
+		service.containerUpdates <- ContainerCreateMsg{ID: containerID}
 		for {
+			fmt.Sprintln(containerID)
 			select {
 			case <-done:
 				statisticsResponse.Body.Close()
@@ -353,24 +274,68 @@ func (service ComposeService) startLiseningForUpdates(containerID string) (strin
 					panic(err)
 				}
 
-				inspectResponse, processes, err := service.getContainerInfo(containerID)
-				if err != nil {
-					panic(err)
+				if newStats.Read.IsZero() {
+					service.removeContainer(containerID)
+					return
 				}
 
-				update := ContainerUpdateMsg{
+				inspectResponse, processes, err := service.getContainerInfo(containerID)
+				if err != nil {
+					fmt.Println(newStats)
+					continue
+				}
+
+				service.containerUpdates <- ContainerUpdateMsg{
 					ID:        containerID,
 					Inspect:   inspectResponse,
 					Stats:     newStats,
 					Processes: processes,
 				}
-
-				service.containerUpdates <- update
 			}
 		}
 	}()
 
-	return inspectResponse.Name, nil
+	return nil
+}
+
+func (service ComposeService) syncContainers() error {
+	containers, err := service.cli.ContainerList(service.ctx,
+		types.ContainerListOptions{
+			All: true,
+			Filters: filters.NewArgs(
+				filters.KeyValuePair{Key: "label", Value: fmt.Sprintf("%s=%s", stackLabel, service.stack)},
+			),
+		})
+	if err != nil {
+		return err
+	}
+
+	existingContainers := make(map[string]struct{})
+
+	for _, container := range containers {
+		existingContainers[container.ID] = struct{}{}
+		if _, ok := service.containers[container.ID]; !ok {
+			service.containers[container.ID] = struct{}{}
+			err := service.startLiseningForUpdates(container.ID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for id := range service.containers {
+		if _, ok := existingContainers[id]; !ok {
+			service.removeContainer(id)
+		}
+	}
+
+	return nil
+}
+
+func (service *ComposeService) removeContainer(id string) {
+	close(service.unsubscribeChannels[id])
+	service.containerUpdates <- ContainerRemoveMsg{ID: id}
+	delete(service.containers, id)
 }
 
 func getStack(ctx context.Context, cli *client.Client, composeFilePath string) (stack string, compose Compose, containers []types.Container, err error) {

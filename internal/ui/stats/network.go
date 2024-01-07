@@ -24,8 +24,8 @@ type network struct {
 	legendStyle lipgloss.Style
 	scaling     []int
 
-	containerName string
-	networks      map[string]ContainerNetworks
+	containerID string
+	networks    map[string]ContainerNetworks
 
 	width  int
 	height int
@@ -49,19 +49,30 @@ func (model network) Init() tea.Cmd {
 func (model network) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case common.ContainerSelectedMsg:
-		model.containerName = msg.Container.InspectData.Name
+		model.containerID = msg.Container.InspectData.ID
+	case docker.ContainerMsg:
+		model = model.handleContainersUpdates(msg)
+	case common.SizeChangeMsq:
+		model.width = msg.Width
+		model.height = msg.Height
+	}
+	return model, nil
+}
+
+func (model network) handleContainersUpdates(msg docker.ContainerMsg) network {
+	switch msg := msg.(type) {
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
 		case "removing", "exited", "dead", "":
-			delete(model.networks, msg.Inspect.Name)
+			delete(model.networks, msg.Inspect.ID)
 		case "restarting", "paused", "running", "created":
-			network, ok := model.networks[msg.Inspect.Name]
+			network, ok := model.networks[msg.Inspect.ID]
 			if !ok {
 				network = ContainerNetworks{
 					IncomingNetwork: queues.New[int](),
 					OutgoingNetwork: queues.New[int](),
 				}
-				model.networks[msg.Inspect.Name] = network
+				model.networks[msg.Inspect.ID] = network
 			}
 			rx, tx := model.sumNetworkUsage(msg.Stats.Networks)
 			err := pushWithLimit(network.IncomingNetwork, rx, model.width*2)
@@ -73,19 +84,18 @@ func (model network) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				panic(err)
 			}
 		}
-	case common.SizeChangeMsq:
-		model.width = msg.Width
-		model.height = msg.Height
+	case docker.ContainerRemoveMsg:
+		delete(model.networks, msg.ID)
 	}
-	return model, nil
+	return model
 }
 
 func (model network) View() string {
-	network, ok := model.networks[model.containerName]
+	network, ok := model.networks[model.containerID]
 	width := model.width - 4
 	height := model.height - 2
 	if !ok || (network.IncomingNetwork.Len() == 0 && network.OutgoingNetwork.Len() == 0) {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "test")), false)
+		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 	incoming := model.RenderNetwork(network.IncomingNetwork, func(current string) string { return model.labelStyle.Render(fmt.Sprintf("RX: %s/sec", current)) }, width/2, height)
 
@@ -96,7 +106,7 @@ func (model network) View() string {
 
 func (model network) RenderNetwork(queue *queues.Queue[int], label func(string) string, width, height int) string {
 	if queue.Len() == 0 {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "test")), false)
+		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
 	total, err := queue.Head()

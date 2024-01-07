@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"strings"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -20,14 +20,8 @@ func Debounce(duration time.Duration) func(func()) {
 	}
 }
 
-func BeautifyContainerName(name, stack string) string {
-	if strings.HasPrefix(name, "/") {
-		name = strings.TrimLeft(name, "/")
-	}
-
-	stackPrefix := fmt.Sprintf("%s-", stack)
-	if strings.HasPrefix(name, stackPrefix) {
-		name = strings.TrimLeft(name, stackPrefix)
-	}
-	return name
+func DisplayContainerName(name, stack string) string {
+	reg := regexp.MustCompile(fmt.Sprintf("/?(%s-)?(?P<name>[a-zA-Z0-9]+(-[0-9]+)?)", stack))
+	index := reg.SubexpIndex("name")
+	return reg.FindStringSubmatch(name)[index]
 }

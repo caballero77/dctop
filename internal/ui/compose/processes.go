@@ -5,6 +5,7 @@ import (
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"dctop/internal/utils/slices"
+	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,8 +15,8 @@ type processesList struct {
 	box   *common.BoxWithBorders
 	table *common.Table
 
-	containerName     string
-	processes         []docker.Process
+	containerID       string
+	processes         map[string][]docker.Process
 	processesListSize int
 	selected          int
 	scrollPosition    int
@@ -42,7 +43,7 @@ func newProcessesList(processesListSize int, theme configuration.Theme) processe
 		selected:          0,
 		scrollPosition:    0,
 		processesListSize: processesListSize,
-		processes:         []docker.Process{},
+		processes:         make(map[string][]docker.Process),
 		label:             labeShortcutStyle.Render("T") + labelStyle.Render("op Processes"),
 	}
 }
@@ -65,33 +66,45 @@ func (model processesList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyUp:
 			if model.focus {
-				model.SelectUp()
+				model.selectUp()
 			}
 		case tea.KeyDown:
 			if model.focus {
-				model.SelectDown()
+				model.selectDown()
 			}
 		}
 	case common.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 	case common.ContainerSelectedMsg:
-		model.processes = msg.Container.Processes
-		model.containerName = msg.Container.InspectData.Name
-	case docker.ContainerUpdateMsg:
-		if model.containerName == msg.Inspect.Name {
-			model.processes = msg.Processes
-		}
+		slog.Info("Container selected",
+			"Id", msg.Container.InspectData.ID)
+		model.containerID = msg.Container.InspectData.ID
+	case docker.ContainerMsg:
+		model = model.handleContainersUpdates(msg)
 	}
 	return model, nil
 }
 
+func (model processesList) handleContainersUpdates(msg docker.ContainerMsg) processesList {
+	switch msg := msg.(type) {
+	case docker.ContainerUpdateMsg:
+		model.processes[msg.Inspect.ID] = msg.Processes
+	case docker.ContainerRemoveMsg:
+		slog.Info("Container removed",
+			"Id", msg.ID)
+		delete(model.processes, msg.ID)
+	}
+	return model
+}
+
 func (model processesList) View() string {
-	if len(model.processes) == 0 {
+	processes, ok := model.processes[model.containerID]
+	if !ok || len(model.processes) == 0 {
 		return model.box.Render(
 			[]string{model.label},
 			[]string{},
-			lipgloss.Place(model.width-2, model.height, lipgloss.Center, lipgloss.Center, "loading..."),
+			lipgloss.Place(model.width-2, model.height, lipgloss.Center, lipgloss.Center, "no data"),
 			model.focus,
 		)
 	}
@@ -104,7 +117,7 @@ func (model processesList) View() string {
 		"Cpu%",
 	}
 
-	items, err := slices.Map(model.processes, func(process docker.Process) ([]string, error) {
+	items, err := slices.Map(processes, func(process docker.Process) ([]string, error) {
 		return []string{
 			process.PID,
 			process.PPID,
@@ -135,13 +148,7 @@ func (model processesList) View() string {
 	)
 }
 
-func (model *processesList) SetProcesses(processes []docker.Process) {
-	model.processes = processes
-	model.selected = 0
-	model.scrollPosition = 0
-}
-
-func (model *processesList) SelectUp() {
+func (model *processesList) selectUp() {
 	if model.selected == 0 {
 		model.selected = len(model.processes) - 1
 		if len(model.processes) > model.processesListSize && model.processesListSize > 0 {
@@ -155,7 +162,7 @@ func (model *processesList) SelectUp() {
 	}
 }
 
-func (model *processesList) SelectDown() {
+func (model *processesList) selectDown() {
 	if model.selected == len(model.processes)-1 {
 		model.selected = 0
 		if len(model.processes) > model.processesListSize && model.processesListSize > 0 {
@@ -167,8 +174,4 @@ func (model *processesList) SelectDown() {
 			model.scrollPosition = model.selected - (model.processesListSize - 1)
 		}
 	}
-}
-
-func (model *processesList) SetFocus(focus bool) {
-	model.focus = focus
 }

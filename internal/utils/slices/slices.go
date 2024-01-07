@@ -82,7 +82,7 @@ func Contains[T comparable](slice []T, value T) bool {
 func Remove[T any](slice []T, predicate func(T) bool) []T {
 	result := make([]T, 0)
 	for _, elem := range slice {
-		if predicate(elem) {
+		if !predicate(elem) {
 			result = append(result, elem)
 		}
 	}

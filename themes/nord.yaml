@@ -53,6 +53,9 @@ file:
   border:
     plain: "#434C5E"
     focus: "#8FBCBB"
+  legend:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
 
 
 logs:

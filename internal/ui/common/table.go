@@ -102,7 +102,11 @@ func (table *Table) Render(headerCells []string, rowCells [][]string, width, sel
 func (table *Table) renderCells(data []string, size []int, width int, render func(string) string) (string, error) {
 	columns, err := slices.MapI(data, func(i int, column string) (string, error) {
 		if len(column) > size[i]-1 {
-			column = column[:size[i]-1]
+			if size[i]-1 >= len(column) {
+				column = ""
+			} else {
+				column = column[:size[i]-1]
+			}
 		}
 		return render(lipgloss.PlaceHorizontal(size[i], lipgloss.Left, column)), nil
 	})
