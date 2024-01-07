@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,13 +35,15 @@ type ComposeService struct {
 
 	containerUpdates    chan ContainerMsg
 	unsubscribeChannels map[string]chan struct{}
-	stopSyncronization  chan struct{}
 }
 
 func ProvideComposeService(composeFilePath string) (*ComposeService, error) {
+	slog.Info("Creating docker client")
 	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
+		slog.Error("Error creating docker client",
+			"Error", err)
 		return nil, err
 	}
 
@@ -77,26 +80,45 @@ func (service ComposeService) ComposeFilePath() string {
 }
 
 func (service ComposeService) Close() error {
+	slog.Debug("Compose service has stoped")
+
+	for _, unsubscribe := range service.unsubscribeChannels {
+		close(unsubscribe)
+	}
 	return service.cli.Close()
 }
 
 func (service ComposeService) ContainerPause(id string) error {
+	slog.Debug("Pausing container",
+		"Id", id)
+
 	return service.cli.ContainerPause(service.ctx, id)
 }
 
 func (service ComposeService) ContainerUnpause(id string) error {
+	slog.Debug("Unpausing container",
+		"Id", id)
+
 	return service.cli.ContainerUnpause(service.ctx, id)
 }
 
 func (service ComposeService) ContainerStop(id string) error {
+	slog.Debug("Stoping container",
+		"Id", id)
+
 	return service.cli.ContainerStop(service.ctx, id, container.StopOptions{})
 }
 
 func (service ComposeService) ContainerStart(id string) error {
+	slog.Debug("Starting container",
+		"Id", id)
+
 	return service.cli.ContainerStart(service.ctx, id, types.ContainerStartOptions{})
 }
 
 func (service ComposeService) ComposeDown() error {
+	slog.Debug("Executing down comand on compose file")
+
 	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "down") // #nosec G204
 	if err := cmd.Run(); err != nil {
 		return err
@@ -106,6 +128,8 @@ func (service ComposeService) ComposeDown() error {
 }
 
 func (service ComposeService) ComposeUp() error {
+	slog.Debug("Executing up comand on compose file")
+
 	cmd := exec.Command("docker-compose", "-f", service.composeFilePath, "up", "-d") // #nosec G204
 	if err := cmd.Run(); err != nil {
 		return err
@@ -115,6 +139,9 @@ func (service ComposeService) ComposeUp() error {
 }
 
 func (service ComposeService) GetContainerLogs(id, tail string) (stdout, stderr chan []byte, e chan error, done chan bool) {
+	slog.Info("Start listening container logs",
+		"Id", id)
+
 	done = make(chan bool)
 	e = make(chan error)
 	stdout, stderr = make(chan []byte), make(chan []byte)
@@ -128,6 +155,10 @@ func (service ComposeService) GetContainerLogs(id, tail string) (stdout, stderr 
 			Follow:     true,
 		})
 		if err != nil {
+			slog.Error("Error while requesting logs",
+				"Id", id,
+				"Error", err)
+
 			e <- err
 			return
 		}
@@ -139,6 +170,10 @@ func (service ComposeService) GetContainerLogs(id, tail string) (stdout, stderr 
 			default:
 				_, err := reader.Read(hdr)
 				if err != nil {
+					slog.Error("Error while reading log header",
+						"Id", id,
+						"Error", err)
+
 					e <- err
 					return
 				}
@@ -146,6 +181,9 @@ func (service ComposeService) GetContainerLogs(id, tail string) (stdout, stderr 
 				dat := make([]byte, count)
 				_, err = reader.Read(dat)
 				if err != nil {
+					slog.Error("Error while reading log message",
+						"Id", id,
+						"Error", err)
 					e <- err
 					return
 				}
@@ -183,15 +221,23 @@ func parseProcesses(top container.ContainerTopOKBody) []Process {
 	return result
 }
 
-func (service ComposeService) getContainerInfo(containerID string) (types.ContainerJSON, []Process, error) {
-	inspectResponse, err := service.cli.ContainerInspect(service.ctx, containerID)
+func (service ComposeService) getContainerInfo(id string) (types.ContainerJSON, []Process, error) {
+	slog.Debug("Requesting container Debug",
+		"Id", id)
+	inspectResponse, err := service.cli.ContainerInspect(service.ctx, id)
 	if err != nil {
+		slog.Error("Container inspect error",
+			"Id", id,
+			"Error", err)
 		return inspectResponse, nil, err
 	}
 	processes := make([]Process, 0)
 	if inspectResponse.State.Status != "exited" {
-		top, err := service.cli.ContainerTop(service.ctx, containerID, []string{"-eo", "pid,ppid,thcount,rss,%cpu,cmd"})
+		top, err := service.cli.ContainerTop(service.ctx, id, []string{"-eo", "pid,ppid,thcount,rss,%cpu,cmd"})
 		if err != nil {
+			slog.Error("Error requesting container top processes",
+				"Id", id,
+				"Error", err)
 			return inspectResponse, nil, err
 		}
 
@@ -203,90 +249,102 @@ func (service ComposeService) getContainerInfo(containerID string) (types.Contai
 
 func (service *ComposeService) GetContainerUpdates() (chan ContainerMsg, error) {
 	if service.containerUpdates != nil {
+		slog.Debug("Getting container updates channel")
 		return service.containerUpdates, nil
 	}
+	slog.Info("Subscribing on containers updates")
 
-	service.containerUpdates = make(chan ContainerMsg, 10000)
+	service.containerUpdates = make(chan ContainerMsg)
 
-	err := service.startListenningForStatistic()
-	if err != nil {
-		return nil, err
+	for id := range service.containers {
+		err := service.startLiseningForUpdates(id)
+		if err != nil {
+			slog.Error("Error subscribing on  updates",
+				"Id", id,
+				"Error", err)
+			return nil, err
+		}
 	}
 
-	service.stopSyncronization = make(chan struct{})
-
+	slog.Info("Start synchronization process of containers")
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				err := service.syncContainers()
-				if err != nil {
-					continue
-				}
-			case <-service.stopSyncronization:
-				return
+		for range ticker.C {
+			err := service.syncContainers()
+			if err != nil {
+				slog.Error("Error in process of containers synchronization",
+					"Error", err)
+				continue
 			}
 		}
 	}()
 
+	slog.Debug("Getting container updates channel")
 	return service.containerUpdates, nil
 }
 
-func (service ComposeService) startListenningForStatistic() error {
-	for id := range service.containers {
-		err := service.startLiseningForUpdates(id)
-		if err != nil {
-			return err
-		}
-	}
+func (service *ComposeService) startLiseningForUpdates(id string) error {
+	slog.Info("Subscribing on container updates",
+		"Id", id)
 
-	return nil
-}
-
-func (service *ComposeService) startLiseningForUpdates(containerID string) error {
 	done := make(chan struct{})
 
-	service.unsubscribeChannels[containerID] = done
+	service.unsubscribeChannels[id] = done
 
-	statisticsResponse, err := service.cli.ContainerStats(service.ctx, containerID, true)
+	slog.Debug("Start listenning container statsisticts",
+		"Id", id)
+
+	statisticsResponse, err := service.cli.ContainerStats(service.ctx, id, true)
 	if err != nil {
+		slog.Error("Error requesting container statistics",
+			"Id", id,
+			"Error", err)
+
 		return err
 	}
 	var newStats ContainerStats
 	decoder := json.NewDecoder(statisticsResponse.Body)
 
 	go func() {
-		service.containerUpdates <- ContainerCreateMsg{ID: containerID}
+		service.containerUpdates <- ContainerCreateMsg{ID: id}
 		for {
-			fmt.Sprintln(containerID)
+			fmt.Sprintln(id)
 			select {
 			case <-done:
+				slog.Info("Stop listeting container statistics",
+					"Id", id)
+
 				statisticsResponse.Body.Close()
 				return
 			case <-service.ctx.Done():
+				slog.Info("Stop listeting container statistics due to end of provided stream",
+					"Id", id)
+
 				statisticsResponse.Body.Close()
 				return
 			default:
 				if err := decoder.Decode(&newStats); errors.Is(err, io.EOF) {
 					return
 				} else if err != nil {
+					slog.Error("Error decoding container statistic",
+						"Id", id,
+						"Error", err)
+
 					panic(err)
 				}
 
-				if newStats.Read.IsZero() {
-					service.removeContainer(containerID)
-					return
-				}
-
-				inspectResponse, processes, err := service.getContainerInfo(containerID)
+				inspectResponse, processes, err := service.getContainerInfo(id)
 				if err != nil {
-					fmt.Println(newStats)
+					slog.Error("Error inspecting container",
+						"Id", id,
+						"Error", err)
+
+					service.removeContainer(id)
 					continue
 				}
 
 				service.containerUpdates <- ContainerUpdateMsg{
-					ID:        containerID,
+					ID:        id,
 					Inspect:   inspectResponse,
 					Stats:     newStats,
 					Processes: processes,
@@ -339,20 +397,27 @@ func (service *ComposeService) removeContainer(id string) {
 }
 
 func getStack(ctx context.Context, cli *client.Client, composeFilePath string) (stack string, compose Compose, containers []types.Container, err error) {
+	slog.Info("Start reading compose file")
 	stack = filepath.Base(filepath.Dir(composeFilePath))
-
-	containers, err = cli.ContainerList(ctx, types.ContainerListOptions{All: true})
-	if err != nil {
-		return "", compose, nil, err
-	}
 
 	bytes, err := os.ReadFile(composeFilePath)
 	if err != nil {
+		slog.Error("Error reading compose file",
+			"Error", err)
 		return "", compose, nil, err
 	}
 
 	err = yaml.Unmarshal(bytes, &compose)
 	if err != nil {
+		slog.Error("Error unmarchaling compose file data",
+			"Error", err)
+		return "", compose, nil, err
+	}
+
+	containers, err = cli.ContainerList(ctx, types.ContainerListOptions{All: true})
+	if err != nil {
+		slog.Error("Error requesting containers list",
+			"Error", err)
 		return "", compose, nil, err
 	}
 

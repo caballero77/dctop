@@ -17,7 +17,7 @@ type Compose struct {
 	config *viper.Viper
 
 	containers  tea.Model
-	processes   tea.Model
+	top         tea.Model
 	composeFile tea.Model
 	logs        tea.Model
 }
@@ -25,7 +25,7 @@ type Compose struct {
 func New(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) Compose {
 	return Compose{
 		containers:  newContainersList(config.GetInt(configuration.ContainersListHeigthName), theme.Sub("containers"), service),
-		processes:   newProcessesList(config.GetInt(configuration.ProcessesListHeightName), theme.Sub("processes")),
+		top:         newTop(config.GetInt(configuration.ProcessesListHeightName), theme.Sub("processes")),
 		logs:        newLogs(*service, theme.Sub("logs")),
 		composeFile: newComposeFile(service.ComposeFilePath(), theme.Sub("file"), service),
 		config:      config,
@@ -43,7 +43,7 @@ func (model Compose) Init() tea.Cmd {
 		cmds = append(cmds, cmd)
 	}
 
-	cmd = model.processes.Init()
+	cmd = model.top.Init()
 	if cmd != nil {
 		cmds = append(cmds, cmd)
 	}
@@ -70,7 +70,7 @@ func (model Compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	model.processes, cmd = model.processes.Update(msg)
+	model.top, cmd = model.top.Update(msg)
 	if cmd != nil {
 		cmds = append(cmds, cmd)
 	}
@@ -101,7 +101,7 @@ func (model Compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		processesHeight := model.config.GetInt(configuration.ProcessesListHeightName) + 3
-		model.processes, cmd = model.processes.Update(common.SizeChangeMsq{Width: msg.Width, Height: processesHeight})
+		model.top, cmd = model.top.Update(common.SizeChangeMsq{Width: msg.Width, Height: processesHeight})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -123,7 +123,7 @@ func (model Compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (model Compose) View() string {
 	containersTab := model.containers.View()
 
-	processesTab := model.processes.View()
+	processesTab := model.top.View()
 
 	logs := model.logs.View()
 

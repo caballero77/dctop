@@ -59,7 +59,7 @@ func newContainersList(size int, theme configuration.Theme, service *docker.Comp
 		containersMap:      make(map[string]*docker.ContainerInfo),
 		cpuUsages:          make(map[string]float64),
 
-		label:               labeShortcutStyle.Render("C") + labelStyle.Render("ontainers"),
+		label:               labeShortcutStyle.Render("c") + labelStyle.Render("ontainers"),
 		legendStyle:         legendStyle,
 		legendShortcutStyle: legendShortcutStyle,
 	}

@@ -94,23 +94,32 @@ func (model io) View() string {
 	width := model.width - 4
 	height := model.height - 2
 	ioUsage, ok := model.ioUsages[model.containerID]
-	if !ok || (ioUsage.IoRead.Len() == 0 && ioUsage.IoWrite.Len() == 0) {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+	if !ok {
+		ioUsage = containerIo{
+			IoRead:  queues.New[int](),
+			IoWrite: queues.New[int](),
+		}
 	}
-	incoming := model.RenderNetwork(ioUsage.IoRead, func(current string) string {
-		return model.labelStyle.Render(fmt.Sprintf("IO Read: %s/sec", current))
-	}, width/2, height)
 
-	outcoming := model.RenderNetwork(ioUsage.IoWrite, func(current string) string {
-		return model.labelStyle.Render(fmt.Sprintf("IO Write: %s/sec", current))
-	}, width/2+width%2, height)
+	getLabelRenderer := func(networkType string) func(string) string {
+		return func(current string) string {
+			if current == "" {
+				return model.labelStyle.Render(networkType)
+			}
+			return model.labelStyle.Render(fmt.Sprintf("%s: %s/sec", networkType, current))
+		}
+	}
+
+	incoming := model.RenderNetwork(ioUsage.IoRead, getLabelRenderer("io read"), width/2, height)
+
+	outcoming := model.RenderNetwork(ioUsage.IoWrite, getLabelRenderer("io write"), width/2+width%2, height)
 
 	return lipgloss.JoinHorizontal(lipgloss.Center, incoming, outcoming)
 }
 
 func (model io) RenderNetwork(queue *queues.Queue[int], label func(string) string, width, height int) string {
 	if queue.Len() == 0 {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+		return model.box.Render([]string{label("")}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
 	total, err := queue.Head()

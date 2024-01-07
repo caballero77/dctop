@@ -84,7 +84,7 @@ func (model memory) View() string {
 	width := model.width - 2
 	height := model.height - 2
 	if !ok || memoryUsage.Len() == 0 {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+		return model.box.Render([]string{model.labelStyle.Render("memory")}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
 	memoryData := memoryUsage.ToArray()
@@ -115,7 +115,7 @@ func (model memory) View() string {
 		panic(err)
 	}
 
-	label := model.labelStyle.Render(fmt.Sprintf("Memory: %s", currentUsage))
+	label := model.labelStyle.Render(fmt.Sprintf("memory: %s", currentUsage))
 
 	return model.box.Render([]string{label}, []string{legend}, plot, false)
 }

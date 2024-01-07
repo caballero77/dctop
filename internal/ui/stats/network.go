@@ -94,19 +94,32 @@ func (model network) View() string {
 	network, ok := model.networks[model.containerID]
 	width := model.width - 4
 	height := model.height - 2
-	if !ok || (network.IncomingNetwork.Len() == 0 && network.OutgoingNetwork.Len() == 0) {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+	if !ok {
+		network = ContainerNetworks{
+			IncomingNetwork: queues.New[int](),
+			OutgoingNetwork: queues.New[int](),
+		}
 	}
-	incoming := model.RenderNetwork(network.IncomingNetwork, func(current string) string { return model.labelStyle.Render(fmt.Sprintf("RX: %s/sec", current)) }, width/2, height)
 
-	outcoming := model.RenderNetwork(network.OutgoingNetwork, func(current string) string { return model.labelStyle.Render(fmt.Sprintf("TX: %s/sec", current)) }, width/2+width%2, height)
+	getLabelRenderer := func(networkType string) func(string) string {
+		return func(current string) string {
+			if current == "" {
+				return model.labelStyle.Render(networkType)
+			}
+			return model.labelStyle.Render(fmt.Sprintf("%s: %s/sec", networkType, current))
+		}
+	}
+
+	incoming := model.renderNetwork(network.IncomingNetwork, getLabelRenderer("rx"), width/2, height)
+
+	outcoming := model.renderNetwork(network.OutgoingNetwork, getLabelRenderer("tx"), width/2+width%2, height)
 
 	return lipgloss.JoinHorizontal(lipgloss.Center, incoming, outcoming)
 }
 
-func (model network) RenderNetwork(queue *queues.Queue[int], label func(string) string, width, height int) string {
+func (model network) renderNetwork(queue *queues.Queue[int], label func(string) string, width, height int) string {
 	if queue.Len() == 0 {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+		return model.box.Render([]string{label("")}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
 	total, err := queue.Head()
@@ -134,8 +147,8 @@ func (model network) RenderNetwork(queue *queues.Queue[int], label func(string) 
 	}
 
 	legends := []string{
-		model.legendStyle.Render(fmt.Sprintf("Total: %s", currentRx)),
-		model.legendStyle.Render(fmt.Sprintf("Max: %s/sec", maxRxChange)),
+		model.legendStyle.Render(fmt.Sprintf("total: %s", currentRx)),
+		model.legendStyle.Render(fmt.Sprintf("max: %s/sec", maxRxChange)),
 	}
 
 	length := 0

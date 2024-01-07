@@ -91,7 +91,7 @@ func (model cpu) View() string {
 	width := model.width - 2
 	height := model.height - 2
 	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
-		return model.box.Render([]string{}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+		return model.box.Render([]string{model.labelStyle.Render("cpu")}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
 	cpuData := cpuUsage.ToArray()
@@ -111,7 +111,7 @@ func (model cpu) View() string {
 	if err != nil {
 		panic(err)
 	}
-	label := model.labelStyle.Render(fmt.Sprintf("Cpu: %.2f", currentUsage) + "%")
+	label := model.labelStyle.Render(fmt.Sprintf("cpu: %.2f", currentUsage) + "%")
 
 	return model.box.Render([]string{label}, []string{legend}, plot, false)
 }

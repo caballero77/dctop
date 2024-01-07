@@ -5,13 +5,12 @@ import (
 	"dctop/internal/docker"
 	"dctop/internal/ui/common"
 	"dctop/internal/utils/slices"
-	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-type processesList struct {
+type top struct {
 	box   *common.BoxWithBorders
 	table *common.Table
 
@@ -28,7 +27,7 @@ type processesList struct {
 	label string
 }
 
-func newProcessesList(processesListSize int, theme configuration.Theme) processesList {
+func newTop(processesListSize int, theme configuration.Theme) top {
 	getColumnSizes := func(width int) []int {
 		return []int{7, 7, width - 39, 8, 10, 5}
 	}
@@ -36,7 +35,7 @@ func newProcessesList(processesListSize int, theme configuration.Theme) processe
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
 	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
 
-	return processesList{
+	return top{
 		box:   common.NewBoxWithLabel(theme.Sub("border")),
 		table: common.NewTable(getColumnSizes, theme.Sub("table")),
 
@@ -44,15 +43,15 @@ func newProcessesList(processesListSize int, theme configuration.Theme) processe
 		scrollPosition:    0,
 		processesListSize: processesListSize,
 		processes:         make(map[string][]docker.Process),
-		label:             labeShortcutStyle.Render("T") + labelStyle.Render("op Processes"),
+		label:             labeShortcutStyle.Render("t") + labelStyle.Render("op"),
 	}
 }
 
-func (model processesList) Init() tea.Cmd {
+func (model top) Init() tea.Cmd {
 	return nil
 }
 
-func (model processesList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model top) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case common.FocusTabChangedMsg:
 		model.focus = msg.Tab == common.Processes
@@ -77,8 +76,6 @@ func (model processesList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.width = msg.Width
 		model.height = msg.Height
 	case common.ContainerSelectedMsg:
-		slog.Info("Container selected",
-			"Id", msg.Container.InspectData.ID)
 		model.containerID = msg.Container.InspectData.ID
 	case docker.ContainerMsg:
 		model = model.handleContainersUpdates(msg)
@@ -86,19 +83,17 @@ func (model processesList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, nil
 }
 
-func (model processesList) handleContainersUpdates(msg docker.ContainerMsg) processesList {
+func (model top) handleContainersUpdates(msg docker.ContainerMsg) top {
 	switch msg := msg.(type) {
 	case docker.ContainerUpdateMsg:
 		model.processes[msg.Inspect.ID] = msg.Processes
 	case docker.ContainerRemoveMsg:
-		slog.Info("Container removed",
-			"Id", msg.ID)
 		delete(model.processes, msg.ID)
 	}
 	return model
 }
 
-func (model processesList) View() string {
+func (model top) View() string {
 	processes, ok := model.processes[model.containerID]
 	if !ok || len(model.processes) == 0 {
 		return model.box.Render(
@@ -148,7 +143,7 @@ func (model processesList) View() string {
 	)
 }
 
-func (model *processesList) selectUp() {
+func (model *top) selectUp() {
 	if model.selected == 0 {
 		model.selected = len(model.processes) - 1
 		if len(model.processes) > model.processesListSize && model.processesListSize > 0 {
@@ -162,7 +157,7 @@ func (model *processesList) selectUp() {
 	}
 }
 
-func (model *processesList) selectDown() {
+func (model *top) selectDown() {
 	if model.selected == len(model.processes)-1 {
 		model.selected = 0
 		if len(model.processes) > model.processesListSize && model.processesListSize > 0 {

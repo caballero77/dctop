@@ -173,7 +173,9 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case <-done:
 						return
 					case err := <-e:
-						panic(err)
+						if err.Error() != "EOF" {
+							panic(err)
+						}
 					}
 				}
 			}()
