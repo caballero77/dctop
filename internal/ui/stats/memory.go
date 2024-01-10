@@ -3,25 +3,26 @@ package stats
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
-	memory_utils "dctop/internal/utils/memory"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 	"dctop/internal/utils/queues"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dustin/go-humanize"
 )
 
 type memory struct {
-	box         *common.BoxWithBorders
+	box         *helpers.BoxWithBorders
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 
 	containerID  string
-	memoryUsages map[string]*queues.Queue[float64]
-	memoryLimit  int
-	cache        int
+	memoryUsages map[string]*queues.Queue[uint]
+	memoryLimit  uint64
+	cache        uint64
 
 	width  int
 	height int
@@ -29,11 +30,11 @@ type memory struct {
 
 func newMemory(theme configuration.Theme) memory {
 	return memory{
-		box:          common.NewBoxWithLabel(theme.Sub("border")),
+		box:          helpers.NewBox(theme.Sub("border")),
 		plotStyles:   lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:   lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle:  lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		memoryUsages: make(map[string]*queues.Queue[float64]),
+		memoryUsages: make(map[string]*queues.Queue[uint]),
 	}
 }
 
@@ -43,20 +44,20 @@ func (model memory) Init() tea.Cmd {
 
 func (model memory) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case common.ContainerSelectedMsg:
+	case messages.ContainerSelectedMsg:
 		model.containerID = msg.Container.InspectData.ID
-		model.memoryLimit = msg.Container.StatsSnapshot.MemoryStats.Limit
-		model.cache = msg.Container.StatsSnapshot.MemoryStats.Stats.Cache
+		model.memoryLimit = uint64(msg.Container.StatsSnapshot.MemoryStats.Limit)
+		model.cache = uint64(msg.Container.StatsSnapshot.MemoryStats.Stats.Cache)
 	case docker.ContainerMsg:
-		model = model.handleContainersUpdates(msg)
-	case common.SizeChangeMsq:
+		model.handleContainersUpdates(msg)
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 	}
 	return model, nil
 }
 
-func (model memory) handleContainersUpdates(msg docker.ContainerMsg) memory {
+func (model *memory) handleContainersUpdates(msg docker.ContainerMsg) {
 	switch msg := msg.(type) {
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
@@ -65,10 +66,10 @@ func (model memory) handleContainersUpdates(msg docker.ContainerMsg) memory {
 		case "restarting", "paused", "running", "created":
 			usage, ok := model.memoryUsages[msg.Inspect.ID]
 			if !ok {
-				usage = queues.New[float64]()
+				usage = queues.New[uint]()
 				model.memoryUsages[msg.Inspect.ID] = usage
 			}
-			err := pushWithLimit(usage, float64(model.calculateMemoruUsage(msg.Stats)), model.width*2)
+			err := usage.PushWithLimit(model.calculateMemoruUsage(msg.Stats), model.width*2)
 			if err != nil {
 				panic(err)
 			}
@@ -76,7 +77,6 @@ func (model memory) handleContainersUpdates(msg docker.ContainerMsg) memory {
 	case docker.ContainerRemoveMsg:
 		delete(model.memoryUsages, msg.ID)
 	}
-	return model
 }
 
 func (model memory) View() string {
@@ -88,38 +88,31 @@ func (model memory) View() string {
 	}
 
 	memoryData := memoryUsage.ToArray()
-	max := 0.0
+	plottingData := make([]float64, len(memoryData))
+	var max uint
 	for _, value := range memoryData {
 		if max < value {
 			max = value
 		}
 	}
 	for i, value := range memoryData {
-		memoryData[i] = value / max * 100
+		plottingData[i] = float64(value) / float64(max) * 100
 	}
 
-	plot := model.plotStyles.Render(renderPlot(memoryData, 1.6, width, height))
+	plot := model.plotStyles.Render(renderPlot(plottingData, 1.6, width, height))
 
-	limit, err := memory_utils.BytesToReadable(float64(model.memoryLimit))
-	if err != nil {
-		panic(err)
-	}
-	legend := model.legendStyle.Render(fmt.Sprintf("limit %s", limit))
+	legend := model.legendStyle.Render(fmt.Sprintf("limit %s", humanize.IBytes(model.memoryLimit)))
 
 	currentUsageInBytes, err := memoryUsage.Head()
 	if err != nil {
 		panic(err)
 	}
-	currentUsage, err := memory_utils.BytesToReadable(currentUsageInBytes)
-	if err != nil {
-		panic(err)
-	}
 
-	label := model.labelStyle.Render(fmt.Sprintf("memory: %s", currentUsage))
+	label := model.labelStyle.Render(fmt.Sprintf("memory: %s", humanize.IBytes(uint64(currentUsageInBytes))))
 
 	return model.box.Render([]string{label}, []string{legend}, plot, false)
 }
 
-func (memory) calculateMemoruUsage(currStats docker.ContainerStats) int {
-	return currStats.MemoryStats.Usage - currStats.MemoryStats.Stats.Cache
+func (memory) calculateMemoruUsage(currStats docker.ContainerStats) uint {
+	return uint(currStats.MemoryStats.Usage - currStats.MemoryStats.Stats.Cache)
 }

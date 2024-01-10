@@ -3,7 +3,8 @@ package compose
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,7 +26,7 @@ type LogsAddedMsg struct {
 type CloseLogsMsg struct{}
 
 type logs struct {
-	box                 common.BoxWithBorders
+	box                 helpers.BoxWithBorders
 	stdoutText          tea.Model
 	stderrText          tea.Model
 	selectedLogType     LogType
@@ -54,17 +55,16 @@ func newLogs(service docker.ComposeService, theme configuration.Theme) logs {
 	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
 
 	return logs{
-		stdoutText:          common.NewTextBox("", style),
-		stderrText:          common.NewTextBox("", style),
+		stdoutText:          helpers.NewTextBox("", style),
+		stderrText:          helpers.NewTextBox("", style),
 		selectedLogType:     Stdout,
-		box:                 *common.NewBoxWithLabel(theme.Sub("border")),
+		box:                 *helpers.NewBox(theme.Sub("border")),
 		labelStyle:          labelStyle,
 		labeShortcutStyle:   labeShortcutStyle,
 		legendShortcutStyle: legendShortcutStyle,
 		legendStyle:         legendStyle,
 		service:             service,
 		updates:             make(chan LogsAddedMsg),
-		open:                false,
 	}
 }
 
@@ -87,21 +87,21 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case common.SizeChangeMsq:
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 
-		model.stdoutText, cmd = model.stdoutText.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
+		model.stdoutText, cmd = model.stdoutText.Update(messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
-		model.stderrText, cmd = model.stderrText.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
+		model.stderrText, cmd = model.stderrText.Update(messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	case CloseLogsMsg:
-		model, cmd = model.close()
+		cmd = model.close()
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -109,25 +109,25 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if model.selected {
 			switch msg.Type {
 			case tea.KeyEsc:
-				model, cmd = model.close()
+				cmd = model.close()
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
-				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Containers} })
+				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
 			case tea.KeyUp:
 				if model.selectedLogType == Stdout {
-					model.stdoutText, cmd = model.stdoutText.Update(common.ScrollMsg{Change: -1})
+					model.stdoutText, cmd = model.stdoutText.Update(messages.ScrollMsg{Change: -1})
 				} else {
-					model.stderrText, cmd = model.stderrText.Update(common.ScrollMsg{Change: -1})
+					model.stderrText, cmd = model.stderrText.Update(messages.ScrollMsg{Change: -1})
 				}
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 			case tea.KeyDown:
 				if model.selectedLogType == Stdout {
-					model.stdoutText, cmd = model.stdoutText.Update(common.ScrollMsg{Change: 1})
+					model.stdoutText, cmd = model.stdoutText.Update(messages.ScrollMsg{Change: 1})
 				} else {
-					model.stderrText, cmd = model.stderrText.Update(common.ScrollMsg{Change: 1})
+					model.stderrText, cmd = model.stderrText.Update(messages.ScrollMsg{Change: 1})
 				}
 				if cmd != nil {
 					cmds = append(cmds, cmd)
@@ -145,20 +145,20 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LogsAddedMsg:
 		switch msg.LogType {
 		case Stdout:
-			model.stdoutText, cmd = model.stdoutText.Update(common.AppendTextMgs{Text: string(msg.Message), AdjustScroll: true})
+			model.stdoutText, cmd = model.stdoutText.Update(messages.AppendTextMgs{Text: string(msg.Message), AdjustScroll: true})
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 		case Stderr:
-			model.stderrText, cmd = model.stderrText.Update(common.AppendTextMgs{Text: string(msg.Message), AdjustScroll: true})
+			model.stderrText, cmd = model.stderrText.Update(messages.AppendTextMgs{Text: string(msg.Message), AdjustScroll: true})
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 		}
 		cmds = append(cmds, model.waitForLogs())
-	case common.FocusTabChangedMsg:
-		model.selected = msg.Tab == common.Logs
-	case common.StartListenningLogsMsg:
+	case messages.FocusTabChangedMsg:
+		model.selected = msg.Tab == messages.Logs
+	case messages.StartListenningLogsMsg:
 		if !model.open {
 			model.open = true
 			stdout, stderr, e, done := model.service.GetContainerLogs(msg.ContainerID, "100")
@@ -222,9 +222,9 @@ func (model logs) legend() string {
 	return stdout + " " + stderr
 }
 
-func (model logs) close() (logs, tea.Cmd) {
+func (model *logs) close() tea.Cmd {
 	if !model.open {
-		return model, nil
+		return nil
 	}
 	model.open = false
 	close(model.done)
@@ -232,17 +232,17 @@ func (model logs) close() (logs, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
-	model.stdoutText, cmd = model.stdoutText.Update(common.ClearTextBoxMsg{})
+	model.stdoutText, cmd = model.stdoutText.Update(messages.ClearTextBoxMsg{})
 	if cmd != nil {
 		cmds = append(cmds, cmd)
 	}
 
-	model.stderrText, cmd = model.stderrText.Update(common.ClearTextBoxMsg{})
+	model.stderrText, cmd = model.stderrText.Update(messages.ClearTextBoxMsg{})
 	if cmd != nil {
 		cmds = append(cmds, cmd)
 	}
 
-	return model, tea.Batch(cmds...)
+	return tea.Batch(cmds...)
 }
 
 func (model logs) waitForLogs() tea.Cmd {

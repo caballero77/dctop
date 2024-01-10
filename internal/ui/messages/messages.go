@@ -1,4 +1,4 @@
-package common
+package messages
 
 import "dctop/internal/docker"
 
@@ -27,3 +27,14 @@ type ContainerSelectedMsg struct {
 type StartListenningLogsMsg struct {
 	ContainerID string
 }
+
+type ScrollMsg struct {
+	Change int
+}
+
+type AppendTextMgs struct {
+	Text         string
+	AdjustScroll bool
+}
+
+type ClearTextBoxMsg struct{}

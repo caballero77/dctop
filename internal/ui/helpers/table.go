@@ -1,9 +1,7 @@
-package common
+package helpers
 
 import (
 	"dctop/internal/configuration"
-	"dctop/internal/utils/slices"
-	utils_strings "dctop/internal/utils/strings"
 	"errors"
 	"strings"
 
@@ -55,9 +53,11 @@ func (table *Table) Render(headerCells []string, rowCells [][]string, width, sel
 	var scrollBar string
 	if height > 0 && len(rowCells) > height {
 		pos := int(float64(scrollPosition) * float64(height) / float64(len(rowCells)-height))
-		newScrollBar, err := utils_strings.ReplaceAtIndex(strings.Repeat("\n", height), "█", pos)
-		if err != nil {
-			return "", err
+		var newScrollBar string
+		if height == pos {
+			newScrollBar = strings.Repeat("\n", height-1) + "█"
+		} else {
+			newScrollBar = strings.Repeat("\n", pos) + "█" + strings.Repeat("\n", height-pos)
 		}
 		scrollBar = table.scrollStyle.Render(newScrollBar)
 		rowCells = rowCells[scrollPosition : scrollPosition+height]
@@ -70,26 +70,23 @@ func (table *Table) Render(headerCells []string, rowCells [][]string, width, sel
 		return "", errors.New("unexpected header length")
 	}
 
-	header, err := table.renderCells(headerCells, size, width, createCellRenderer(table.headerCellStyle))
-	if err != nil {
-		return "", err
-	}
+	header := table.renderCells(headerCells, width, size, table.headerCellStyle)
 
-	bodyCellRenderer := createCellRenderer(table.bodyCellStyle)
-	selectedRowRenderer := createCellRenderer(table.selectedRowStyle)
-
-	rows, err := slices.MapI(rowCells, func(i int, row []string) (string, error) {
+	rows := make([]string, len(rowCells))
+	for i, row := range rowCells {
+		style := table.bodyCellStyle
 		if i+scrollPosition == selected {
-			return table.renderCells(row, size, width, selectedRowRenderer)
+			style = table.selectedRowStyle
 		}
-		return table.renderCells(row, size, width, bodyCellRenderer)
-	})
-	if err != nil {
-		return "", err
+		rows[i] = table.renderCells(row, width, size, style)
 	}
 
 	if len(rows) < height {
-		rows = append(rows, slices.Repeat(strings.Repeat(" ", width), height-len(rows))...)
+		emptyRows := make([]string, height-len(rows))
+		for i := 0; i < len(emptyRows); i++ {
+			emptyRows[i] = strings.Repeat(" ", width)
+		}
+		rows = append(rows, emptyRows...)
 	}
 
 	return lipgloss.JoinHorizontal(
@@ -99,26 +96,18 @@ func (table *Table) Render(headerCells []string, rowCells [][]string, width, sel
 	), nil
 }
 
-func (table *Table) renderCells(data []string, size []int, width int, render func(string) string) (string, error) {
-	columns, err := slices.MapI(data, func(i int, column string) (string, error) {
-		if len(column) > size[i]-1 {
-			if size[i]-1 >= len(column) {
-				column = ""
+func (table Table) renderCells(data []string, width int, size []int, style lipgloss.Style) string {
+	cells := make([]string, len(data))
+	for i, cell := range data {
+		if len(cell) > size[i]-1 {
+			if size[i]-1 >= len(cell) {
+				cell = ""
 			} else {
-				column = column[:size[i]-1]
+				cell = cell[:size[i]-1]
 			}
 		}
-		return render(lipgloss.PlaceHorizontal(size[i], lipgloss.Left, column)), nil
-	})
-	if err != nil {
-		return "", err
+		cells[i] = style.Render(lipgloss.PlaceHorizontal(size[i], lipgloss.Left, cell))
 	}
 
-	return lipgloss.PlaceHorizontal(width, lipgloss.Left, lipgloss.JoinHorizontal(lipgloss.Center, columns...)), nil
-}
-
-func createCellRenderer(style lipgloss.Style) func(string) string {
-	return func(cell string) string {
-		return style.Render(cell)
-	}
+	return lipgloss.PlaceHorizontal(width, lipgloss.Left, lipgloss.JoinHorizontal(lipgloss.Center, cells...))
 }

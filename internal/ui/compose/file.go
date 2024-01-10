@@ -3,7 +3,8 @@ package compose
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 	"os"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 )
 
 type file struct {
-	box     common.BoxWithBorders
+	box     helpers.BoxWithBorders
 	text    tea.Model
 	service *docker.ComposeService
 
@@ -42,8 +43,8 @@ func newComposeFile(path string, theme configuration.Theme, service *docker.Comp
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
 
 	return file{
-		text:        common.NewTextBox(composeFile, style),
-		box:         *common.NewBoxWithLabel(theme.Sub("border")),
+		text:        helpers.NewTextBox(composeFile, style),
+		box:         *helpers.NewBox(theme.Sub("border")),
 		service:     service,
 		composeFile: strings.Split(composeFile, "\n"),
 		label:       labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),
@@ -65,13 +66,13 @@ func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case common.FocusTabChangedMsg:
-		model.focus = msg.Tab == common.Compose
-	case common.SizeChangeMsq:
+	case messages.FocusTabChangedMsg:
+		model.focus = msg.Tab == messages.Compose
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 
-		model.text, cmd = model.text.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
+		model.text, cmd = model.text.Update(messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -79,12 +80,12 @@ func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if model.focus {
 			switch msg.Type {
 			case tea.KeyUp:
-				model.text, cmd = model.text.Update(common.ScrollMsg{Change: -1})
+				model.text, cmd = model.text.Update(messages.ScrollMsg{Change: -1})
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 			case tea.KeyDown:
-				model.text, cmd = model.text.Update(common.ScrollMsg{Change: 1})
+				model.text, cmd = model.text.Update(messages.ScrollMsg{Change: 1})
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}

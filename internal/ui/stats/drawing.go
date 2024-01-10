@@ -1,7 +1,6 @@
 package stats
 
 import (
-	"dctop/internal/utils/queues"
 	"math"
 	"slices"
 
@@ -69,47 +68,32 @@ func renderPlot(data []float64, scale float64, width, height int) string {
 	return lipgloss.JoinVertical(lipgloss.Center, lines...)
 }
 
-func getDataChangeFromQueue(data []int, width int) (changes []float64, maxValue, maxChange, current float64) {
-	changes = make([]float64, len(data)-1)
-	prev := 0.0
-	maxChange = .0
-	for i := 0; i < len(data) && i < width*2; i++ {
+func getRate(data []uint64) (rates []float64, max, current uint64) {
+	changes := make([]uint64, len(data)-1)
+	var prev uint64
+	for i := 0; i < len(data); i++ {
+		value := data[i]
 		if i == 0 {
-			prev = float64(data[i])
+			prev = value
 			continue
 		}
-		curr := float64(data[i])
+		curr := value
 		changes[i-1] = prev - curr
 		prev = curr
-		if changes[i-1] > maxChange {
-			maxChange = changes[i-1]
+		if changes[i-1] > max {
+			max = changes[i-1]
 		}
 	}
-	current = .0
 	if len(changes) > 0 {
 		current = changes[0]
 	}
 
-	max := .0
-	if maxChange != 0 {
+	rates = make([]float64, len(changes))
+	if max != 0 {
 		for i := 0; i < len(changes); i++ {
-			changes[i] = (changes[i] / maxChange) * 100
-			if changes[i] > max {
-				max = changes[i]
-			}
+			rates[i] = (float64(changes[i]) / float64(max)) * 100
 		}
 	}
 
-	return changes, max, maxChange, current
-}
-
-func pushWithLimit[T any](queue *queues.Queue[T], value T, limit int) error {
-	queue.Push(value)
-	for limit != 0 && queue.Len() > limit {
-		_, err := queue.Pop()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return rates, max, current
 }

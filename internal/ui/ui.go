@@ -3,8 +3,9 @@ package ui
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
 	"dctop/internal/ui/compose"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 	"dctop/internal/ui/stats"
 	"fmt"
 
@@ -18,64 +19,44 @@ type UI struct {
 	config      *viper.Viper
 	stats       tea.Model
 	compose     tea.Model
-	selectedTab common.Tab
+	selectedTab messages.Tab
 	service     *docker.ComposeService
+	updates     chan docker.ContainerMsg
 
 	width  int
 	height int
 }
 
 func NewUI(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) UI {
-
+	updates, err := service.GetContainerUpdates()
+	if err != nil {
+		panic(err)
+	}
 	return UI{
 		theme:  theme,
 		config: config,
 		stats:  stats.NewStats(theme),
 
 		compose:     compose.New(config, theme, service),
-		selectedTab: common.Containers,
+		selectedTab: messages.Containers,
 		service:     service,
+		updates:     updates,
 	}
 }
 
 func (model UI) Init() tea.Cmd {
-	cmds := make([]tea.Cmd, 0)
-	var cmd tea.Cmd
-
-	cmd = model.stats.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	cmd = model.compose.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	return tea.Batch(cmds...)
+	return helpers.Init(
+		model.compose,
+		model.stats,
+	)
 }
 
 func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
-	var cmd tea.Cmd
-
-	model.stats, cmd = model.stats.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	model.compose, cmd = model.compose.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
 
 	switch msg := msg.(type) {
 	case docker.ContainerMsg:
-		updates, err := model.service.GetContainerUpdates()
-		if err != nil {
-			panic(err)
-		}
-		cmds = append(cmds, waitForActivity(updates))
+		cmds = append(cmds, waitForActivity(model.updates))
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
@@ -83,38 +64,37 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyRunes:
 			switch string(msg.Runes) {
 			case "c":
-				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Containers} })
+				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
 			case "t":
-				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Processes} })
+				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Processes} })
 			case "f":
-				cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Compose} })
+				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Compose} })
 			}
 		}
 	case tea.WindowSizeMsg:
 		model.width = msg.Width
 		model.height = msg.Height
 
-		var stastMsg, composeMsg common.SizeChangeMsq
+		var stastMsg, composeMsg messages.SizeChangeMsq
 
 		switch {
 		case model.height >= 30 && model.width >= 150 || true:
-			stastMsg = common.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
-			composeMsg = common.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
+			stastMsg = messages.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
+			composeMsg = messages.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
 		case model.width < 150:
-			stastMsg = common.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
-			composeMsg = common.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
+			stastMsg = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
+			composeMsg = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
 		}
 
-		model.stats, cmd = model.stats.Update(stastMsg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-
-		model.compose, cmd = model.compose.Update(composeMsg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+		return model, helpers.PassMsgs(
+			helpers.NewModel(model.compose, func(m tea.Model) { model.compose = m }).WithMsg(composeMsg),
+			helpers.NewModel(model.stats, func(m tea.Model) { model.stats = m }).WithMsg(stastMsg),
+		)
 	}
+	cmds = append(cmds, helpers.PassMsg(msg,
+		helpers.NewModel(model.compose, func(m tea.Model) { model.compose = m }),
+		helpers.NewModel(model.stats, func(m tea.Model) { model.stats = m }),
+	))
 
 	return model, tea.Batch(cmds...)
 }

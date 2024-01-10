@@ -1,4 +1,4 @@
-package common
+package helpers
 
 import (
 	"dctop/internal/configuration"
@@ -13,7 +13,7 @@ type BoxWithBorders struct {
 	focusColor lipgloss.Color
 }
 
-func NewBoxWithLabel(theme configuration.Theme) *BoxWithBorders {
+func NewBox(theme configuration.Theme) *BoxWithBorders {
 	border := lipgloss.Border{
 		Top:         "─",
 		Bottom:      "─",
@@ -71,7 +71,7 @@ func (b BoxWithBorders) Render(labels, legends []string, content string, focus b
 		bottomBorder = bottomLeft + borderStyle.Render(gap) + bottomRight
 	} else {
 		sep := borderStyle.Render(border.Top)
-		legend := strings.Join(legends, sep)
+		legend := strings.Join(adjustLegendLegth(legends, width), sep)
 		cellsShort := max(0, width+borderWidth-lipgloss.Width(bottomLeft+bottomRight+legend+bottom))
 		gap := strings.Repeat(border.Top, cellsShort)
 		bottomBorder = bottomLeft + bottom + legend + borderStyle.Render(gap) + bottomRight
@@ -84,4 +84,22 @@ func (b BoxWithBorders) Render(labels, legends []string, content string, focus b
 		Render(content)
 
 	return topBorder + "\n" + middle + "\n" + bottomBorder
+}
+
+func adjustLegendLegth(legends []string, width int) []string {
+	length := 0
+	for _, legend := range legends {
+		length += lipgloss.Width(legend)
+	}
+	i := len(legends) - 1
+	for len(legends) != 0 && i >= 0 {
+		if length+2 >= width {
+			length -= len(legends[i])
+			legends = legends[:i]
+			i--
+		} else {
+			break
+		}
+	}
+	return legends
 }

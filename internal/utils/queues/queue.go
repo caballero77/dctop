@@ -2,7 +2,8 @@ package queues
 
 import (
 	"container/list"
-	"errors"
+
+	"github.com/pkg/errors"
 )
 
 type Queue[T any] struct {
@@ -17,6 +18,17 @@ func New[T any]() *Queue[T] {
 
 func (queue *Queue[T]) Push(value T) {
 	queue.list.PushBack(value)
+}
+
+func (queue *Queue[T]) PushWithLimit(value T, limit int) error {
+	queue.Push(value)
+	for limit >= 0 && queue.Len() > limit {
+		_, err := queue.Pop()
+		if err != nil {
+			return errors.Wrap(err, "Error pushing value into queue with limit")
+		}
+	}
+	return nil
 }
 
 func (queue Queue[T]) Len() int {

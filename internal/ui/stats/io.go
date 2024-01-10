@@ -3,22 +3,23 @@ package stats
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
-	memory_utils "dctop/internal/utils/memory"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 	"dctop/internal/utils/queues"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dustin/go-humanize"
 )
 
 type containerIo struct {
-	IoRead  *queues.Queue[int]
-	IoWrite *queues.Queue[int]
+	IoRead  *queues.Queue[uint64]
+	IoWrite *queues.Queue[uint64]
 }
 
 type io struct {
-	box         *common.BoxWithBorders
+	box         *helpers.BoxWithBorders
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
@@ -33,7 +34,7 @@ type io struct {
 
 func newIO(theme configuration.Theme) io {
 	return io{
-		box:         common.NewBoxWithLabel(theme.Sub("border")),
+		box:         helpers.NewBox(theme.Sub("border")),
 		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
@@ -48,18 +49,18 @@ func (model io) Init() tea.Cmd {
 
 func (model io) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case common.ContainerSelectedMsg:
+	case messages.ContainerSelectedMsg:
 		model.containerID = msg.Container.InspectData.ID
 	case docker.ContainerMsg:
-		model = model.handleContainersUpdates(msg)
-	case common.SizeChangeMsq:
+		model.handleContainersUpdates(msg)
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 	}
 	return model, nil
 }
 
-func (model io) handleContainersUpdates(msg docker.ContainerMsg) io {
+func (model *io) handleContainersUpdates(msg docker.ContainerMsg) {
 	switch msg := msg.(type) {
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
@@ -69,17 +70,17 @@ func (model io) handleContainersUpdates(msg docker.ContainerMsg) io {
 			network, ok := model.ioUsages[msg.Inspect.ID]
 			if !ok {
 				network = containerIo{
-					IoRead:  queues.New[int](),
-					IoWrite: queues.New[int](),
+					IoRead:  queues.New[uint64](),
+					IoWrite: queues.New[uint64](),
 				}
 				model.ioUsages[msg.Inspect.ID] = network
 			}
 			read, write := model.getIoUsage(&msg.Stats.BlkioStats)
-			err := pushWithLimit(network.IoRead, read, model.width*2)
+			err := network.IoRead.PushWithLimit(read, model.width*2)
 			if err != nil {
 				panic(err)
 			}
-			err = pushWithLimit(network.IoWrite, write, model.width*2)
+			err = network.IoWrite.PushWithLimit(write, model.width*2)
 			if err != nil {
 				panic(err)
 			}
@@ -87,7 +88,6 @@ func (model io) handleContainersUpdates(msg docker.ContainerMsg) io {
 	case docker.ContainerRemoveMsg:
 		delete(model.ioUsages, msg.ID)
 	}
-	return model
 }
 
 func (model io) View() string {
@@ -96,8 +96,8 @@ func (model io) View() string {
 	ioUsage, ok := model.ioUsages[model.containerID]
 	if !ok {
 		ioUsage = containerIo{
-			IoRead:  queues.New[int](),
-			IoWrite: queues.New[int](),
+			IoRead:  queues.New[uint64](),
+			IoWrite: queues.New[uint64](),
 		}
 	}
 
@@ -110,15 +110,15 @@ func (model io) View() string {
 		}
 	}
 
-	incoming := model.RenderNetwork(ioUsage.IoRead, getLabelRenderer("io read"), width/2, height)
+	read := model.RenderIo(ioUsage.IoRead, getLabelRenderer("io read"), width/2, height)
 
-	outcoming := model.RenderNetwork(ioUsage.IoWrite, getLabelRenderer("io write"), width/2+width%2, height)
+	write := model.RenderIo(ioUsage.IoWrite, getLabelRenderer("io write"), width/2+width%2, height)
 
-	return lipgloss.JoinHorizontal(lipgloss.Center, incoming, outcoming)
+	return lipgloss.JoinHorizontal(lipgloss.Center, read, write)
 }
 
-func (model io) RenderNetwork(queue *queues.Queue[int], label func(string) string, width, height int) string {
-	if queue.Len() == 0 {
+func (model io) RenderIo(queue *queues.Queue[uint64], label func(string) string, width, height int) string {
+	if queue.Len() <= 1 {
 		return model.box.Render([]string{label("")}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
 	}
 
@@ -127,65 +127,25 @@ func (model io) RenderNetwork(queue *queues.Queue[int], label func(string) strin
 		panic(err)
 	}
 
-	data, max, maxChange, current := getDataChangeFromQueue(queue.ToArray(), width)
-	scale := model.calculateScalingKoeficient(max)
-	plot := model.plotStyles.Render(renderPlot(data, scale, width, height))
-
-	currentRx, err := memory_utils.BytesToReadable(float64(total))
-	if err != nil {
-		panic(err)
-	}
-
-	maxRxChange, err := memory_utils.BytesToReadable(maxChange)
-	if err != nil {
-		panic(err)
-	}
-
-	currentChange, err := memory_utils.BytesToReadable(current)
-	if err != nil {
-		panic(err)
-	}
+	data, maxRate, currentRate := getRate(queue.ToArray())
+	plot := model.plotStyles.Render(renderPlot(data, 1, width, height))
 
 	legends := []string{
-		model.legendStyle.Render(fmt.Sprintf("Total: %s", currentRx)),
-		model.legendStyle.Render(fmt.Sprintf("Max: %s/sec", maxRxChange)),
+		model.legendStyle.Render(fmt.Sprintf("total: %s", humanize.IBytes(total))),
+		model.legendStyle.Render(fmt.Sprintf("max: %s/sec", humanize.IBytes(maxRate))),
 	}
 
-	length := 0
-	for _, legend := range legends {
-		length += lipgloss.Width(legend)
-	}
-	i := len(legends) - 1
-	for len(legends) != 0 && i >= 0 {
-		if length+2 >= width {
-			length -= len(legends[i])
-			legends = legends[:i]
-			i--
-		} else {
-			break
-		}
-	}
-
-	return model.box.Render([]string{label(currentChange)}, legends, plot, false)
+	return model.box.Render([]string{label(humanize.IBytes(currentRate))}, legends, plot, false)
 }
 
-func (model io) calculateScalingKoeficient(maxValue float64) float64 {
-	for i := 0; i < len(model.scaling); i++ {
-		if maxValue < float64(model.scaling[i]) {
-			return float64(model.scaling[i]) / 100
-		}
-	}
-	return 1
-}
-
-func (io) getIoUsage(stats *docker.BlkioStats) (read, write int) {
+func (io) getIoUsage(stats *docker.BlkioStats) (read, write uint64) {
 	for i := 0; i < len(stats.IoServiceBytesRecursive); i++ {
 		curr := stats.IoServiceBytesRecursive[i]
 		switch curr.Operation {
 		case "read":
-			read += curr.Value
+			read += uint64(curr.Value)
 		case "write":
-			write += curr.Value
+			write += uint64(curr.Value)
 		}
 	}
 	return read, write

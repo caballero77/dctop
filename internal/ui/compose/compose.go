@@ -3,7 +3,8 @@ package compose
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -33,89 +34,54 @@ func New(config *viper.Viper, theme configuration.Theme, service *docker.Compose
 }
 
 func (model Compose) Init() tea.Cmd {
-	cmds := make([]tea.Cmd, 0)
-	var cmd tea.Cmd
-
-	cmds = append(cmds, func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Containers} })
-
-	cmd = model.containers.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	cmd = model.top.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	cmd = model.logs.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	cmd = model.composeFile.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	return tea.Batch(cmds...)
+	return tea.Batch(
+		func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} },
+		helpers.Init(
+			model.containers,
+			model.top,
+			model.logs,
+			model.composeFile,
+		),
+	)
 }
 
 func (model Compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
-	var cmd tea.Cmd
-
-	model.containers, cmd = model.containers.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	model.top, cmd = model.top.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	model.logs, cmd = model.logs.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	model.composeFile, cmd = model.composeFile.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
 
 	switch msg := msg.(type) {
-	case common.FocusTabChangedMsg:
-		if msg.Tab == common.Compose {
+	case messages.FocusTabChangedMsg:
+		if msg.Tab == messages.Compose {
 			cmds = append(cmds, func() tea.Msg { return CloseLogsMsg{} })
 		}
-	case common.SizeChangeMsq:
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 
-		containersHeight := model.config.GetInt(configuration.ContainersListHeigthName) + 3
-		model.containers, cmd = model.containers.Update(common.SizeChangeMsq{Width: msg.Width, Height: containersHeight})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+		var (
+			containersHeight = model.config.GetInt(configuration.ContainersListHeigthName) + 3
+			processesHeight  = model.config.GetInt(configuration.ProcessesListHeightName) + 3
 
-		processesHeight := model.config.GetInt(configuration.ProcessesListHeightName) + 3
-		model.top, cmd = model.top.Update(common.SizeChangeMsq{Width: msg.Width, Height: processesHeight})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+			containersSize = messages.SizeChangeMsq{Width: msg.Width, Height: containersHeight}
+			topSize        = messages.SizeChangeMsq{Width: msg.Width, Height: processesHeight}
+			dynamicTabSize = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - containersHeight - processesHeight - 2}
+		)
 
-		model.logs, cmd = model.logs.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - containersHeight - processesHeight - 2})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-
-		model.composeFile, cmd = model.composeFile.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - containersHeight - processesHeight - 2})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+		cmd := tea.Batch(helpers.PassMsgs(
+			helpers.NewModel(model.containers, func(m tea.Model) { model.containers = m }).WithMsg(containersSize),
+			helpers.NewModel(model.top, func(m tea.Model) { model.top = m }).WithMsg(topSize),
+			helpers.NewModel(model.logs, func(m tea.Model) { model.logs = m }).WithMsg(dynamicTabSize),
+			helpers.NewModel(model.composeFile, func(m tea.Model) { model.composeFile = m }).WithMsg(dynamicTabSize),
+		))
+		return model, cmd
 	}
+
+	cmd := helpers.PassMsg(msg,
+		helpers.NewModel(model.containers, func(m tea.Model) { model.containers = m }),
+		helpers.NewModel(model.top, func(m tea.Model) { model.top = m }),
+		helpers.NewModel(model.logs, func(m tea.Model) { model.logs = m }),
+		helpers.NewModel(model.composeFile, func(m tea.Model) { model.composeFile = m }),
+	)
+	cmds = append(cmds, cmd)
 
 	return model, tea.Batch(cmds...)
 }

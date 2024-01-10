@@ -2,7 +2,8 @@ package stats
 
 import (
 	"dctop/internal/configuration"
-	"dctop/internal/ui/common"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -28,80 +29,42 @@ func NewStats(theme configuration.Theme) Stats {
 }
 
 func (model Stats) Init() tea.Cmd {
-	cmds := make([]tea.Cmd, 0)
-	var cmd tea.Cmd
-
-	cmd = model.networkModel.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	cmd = model.ioStatsModel.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	cmd = model.cpuStatsModel.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	cmd = model.memoryStatsModel.Init()
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	return tea.Batch(cmds...)
+	return helpers.Init(
+		model.networkModel,
+		model.ioStatsModel,
+		model.memoryStatsModel,
+		model.cpuStatsModel,
+	)
 }
 
 func (model Stats) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
-	var cmd tea.Cmd
-
-	model.cpuStatsModel, cmd = model.cpuStatsModel.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	model.memoryStatsModel, cmd = model.memoryStatsModel.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	model.networkModel, cmd = model.networkModel.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	model.ioStatsModel, cmd = model.ioStatsModel.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	if msg, ok := msg.(common.SizeChangeMsq); ok {
+	if msg, ok := msg.(messages.SizeChangeMsq); ok {
 		model.width = msg.Width
 		model.height = msg.Height
 
-		model.cpuStatsModel, cmd = model.cpuStatsModel.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 3*(msg.Height/5)})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+		var (
+			cpuSize     = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 3*(msg.Height/5)}
+			memorySize  = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 5}
+			networkSize = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 5}
+			ioSize      = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 5}
+		)
 
-		model.memoryStatsModel, cmd = model.memoryStatsModel.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 5})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-
-		model.networkModel, cmd = model.networkModel.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 5})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-
-		model.ioStatsModel, cmd = model.ioStatsModel.Update(common.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 5})
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+		cmd := tea.Batch(helpers.PassMsgs(
+			helpers.NewModel(model.cpuStatsModel, func(m tea.Model) { model.cpuStatsModel = m }).WithMsg(cpuSize),
+			helpers.NewModel(model.memoryStatsModel, func(m tea.Model) { model.memoryStatsModel = m }).WithMsg(memorySize),
+			helpers.NewModel(model.networkModel, func(m tea.Model) { model.networkModel = m }).WithMsg(networkSize),
+			helpers.NewModel(model.ioStatsModel, func(m tea.Model) { model.ioStatsModel = m }).WithMsg(ioSize),
+		))
+		return model, cmd
 	}
+
+	cmds := make([]tea.Cmd, 0)
+	cmds = append(cmds, helpers.PassMsg(msg,
+		helpers.NewModel(model.networkModel, func(m tea.Model) { model.networkModel = m }),
+		helpers.NewModel(model.ioStatsModel, func(m tea.Model) { model.ioStatsModel = m }),
+		helpers.NewModel(model.memoryStatsModel, func(m tea.Model) { model.memoryStatsModel = m }),
+		helpers.NewModel(model.cpuStatsModel, func(m tea.Model) { model.cpuStatsModel = m }),
+	))
 
 	return model, tea.Batch(cmds...)
 }

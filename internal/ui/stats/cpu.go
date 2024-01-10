@@ -3,7 +3,8 @@ package stats
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 	"dctop/internal/utils/queues"
 	"fmt"
 	"math"
@@ -13,7 +14,7 @@ import (
 )
 
 type cpu struct {
-	box         *common.BoxWithBorders
+	box         *helpers.BoxWithBorders
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
@@ -29,7 +30,7 @@ type cpu struct {
 
 func newCPU(theme configuration.Theme) cpu {
 	return cpu{
-		box:         common.NewBoxWithLabel(theme.Sub("border")),
+		box:         helpers.NewBox(theme.Sub("border")),
 		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
@@ -46,18 +47,18 @@ func (cpu) Init() tea.Cmd {
 
 func (model cpu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case common.ContainerSelectedMsg:
+	case messages.ContainerSelectedMsg:
 		model.containerID = msg.Container.InspectData.ID
 	case docker.ContainerMsg:
-		model = model.handleContainersUpdates(msg)
-	case common.SizeChangeMsq:
+		model.handleContainersUpdates(msg)
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 	}
 	return model, nil
 }
 
-func (model cpu) handleContainersUpdates(msg docker.ContainerMsg) cpu {
+func (model *cpu) handleContainersUpdates(msg docker.ContainerMsg) {
 	switch msg := msg.(type) {
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
@@ -72,7 +73,7 @@ func (model cpu) handleContainersUpdates(msg docker.ContainerMsg) cpu {
 					usage = queues.New[float64]()
 					model.cpuUsages[msg.Inspect.ID] = usage
 				}
-				err := pushWithLimit(usage, model.calculateCPUUsage(msg.Stats, prevStats), model.width*2)
+				err := usage.PushWithLimit(model.calculateCPUUsage(msg.Stats, prevStats), model.width*2)
 				if err != nil {
 					panic(err)
 				}
@@ -83,7 +84,6 @@ func (model cpu) handleContainersUpdates(msg docker.ContainerMsg) cpu {
 		delete(model.cpuUsages, msg.ID)
 		delete(model.prevContainerStats, msg.ID)
 	}
-	return model
 }
 
 func (model cpu) View() string {

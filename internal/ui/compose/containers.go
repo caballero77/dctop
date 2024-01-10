@@ -3,21 +3,23 @@ package compose
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 	"dctop/internal/utils"
-	"dctop/internal/utils/maps"
-	"dctop/internal/utils/slices"
 	"fmt"
+	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/exp/maps"
 )
 
 type containersList struct {
-	box   *common.BoxWithBorders
-	table *common.Table
+	box   *helpers.BoxWithBorders
+	table *helpers.Table
 
 	selected           int
 	scrollPosition     int
@@ -27,6 +29,7 @@ type containersList struct {
 	cpuUsages          map[string]float64
 	focus              bool
 	service            *docker.ComposeService
+	updates            chan docker.ContainerMsg
 
 	width  int
 	height int
@@ -47,13 +50,16 @@ func newContainersList(size int, theme configuration.Theme, service *docker.Comp
 	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
 	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
 
+	updates, err := service.GetContainerUpdates()
+	if err != nil {
+		panic(err)
+	}
+
 	return containersList{
-		box:   common.NewBoxWithLabel(theme.Sub("border")),
-		table: common.NewTable(getColumnSizes, theme.Sub("table")),
+		box:   helpers.NewBox(theme.Sub("border")),
+		table: helpers.NewTable(getColumnSizes, theme.Sub("table")),
 
 		containersListSize: size,
-		selected:           0,
-		scrollPosition:     0,
 		containers:         []*docker.ContainerInfo{},
 		service:            service,
 		containersMap:      make(map[string]*docker.ContainerInfo),
@@ -62,16 +68,13 @@ func newContainersList(size int, theme configuration.Theme, service *docker.Comp
 		label:               labeShortcutStyle.Render("c") + labelStyle.Render("ontainers"),
 		legendStyle:         legendStyle,
 		legendShortcutStyle: legendShortcutStyle,
+		updates:             updates,
 	}
 }
 
 func (model containersList) Init() tea.Cmd {
-	updates, err := model.service.GetContainerUpdates()
-	if err != nil {
-		panic(err)
-	}
 	return func() tea.Msg {
-		return <-updates
+		return <-model.updates
 	}
 }
 
@@ -83,54 +86,10 @@ func (model containersList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !model.focus {
 				return model, nil
 			}
-			switch string(msg.Runes) {
-			case "s":
-				return model, func() tea.Msg {
-					selectedContainer := model.containers[model.selected]
-					switch selectedContainer.InspectData.State.Status {
-					case "running":
-						err := model.service.ContainerStop(selectedContainer.InspectData.ID)
-						if err != nil {
-							panic(err)
-						}
-					case "exited", "dead", "created":
-						err := model.service.ContainerStart(selectedContainer.InspectData.ID)
-						if err != nil {
-							panic(err)
-						}
-					}
-					return nil
-				}
-			case "p":
-				return model, func() tea.Msg {
-					selectedContainer := model.containers[model.selected]
-					switch selectedContainer.InspectData.State.Status {
-					case "running":
-						err := model.service.ContainerPause(selectedContainer.InspectData.ID)
-						if err != nil {
-							panic(err)
-						}
-					case "paused":
-						err := model.service.ContainerUnpause(selectedContainer.InspectData.ID)
-						if err != nil {
-							panic(err)
-						}
-					}
-					return nil
-				}
-			case "l":
-				if len(model.containers) != 0 {
-					selectedContainer := model.containers[model.selected]
-					if selectedContainer.InspectData.State.Status != "" {
-						return model, tea.Batch(
-							func() tea.Msg {
-								return common.StartListenningLogsMsg{ContainerID: model.containers[model.selected].InspectData.ID}
-							},
-							func() tea.Msg { return common.FocusTabChangedMsg{Tab: common.Logs} },
-						)
-					}
-					return model, nil
-				}
+
+			cmd := model.handleContainerAction(string(msg.Runes))
+			if cmd != nil {
+				return model, cmd
 			}
 		case tea.KeyUp:
 			if model.focus && len(model.containers) > 0 {
@@ -145,56 +104,19 @@ func (model containersList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return model, nil
 		}
-	case common.FocusTabChangedMsg:
-		model.focus = msg.Tab == common.Containers
+	case messages.FocusTabChangedMsg:
+		model.focus = msg.Tab == messages.Containers
 
 		return model, nil
-	case common.SizeChangeMsq:
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 	case docker.ContainerMsg:
-		return model.handleContainersUpdates(msg)
+		cmd := model.handleContainersUpdates(msg)
+		return model, cmd
 	}
 
 	return model, nil
-}
-
-func (model containersList) handleContainersUpdates(msg docker.ContainerMsg) (containersList, tea.Cmd) {
-	switch msg := msg.(type) {
-	case docker.ContainerRemoveMsg:
-		model.containers = slices.Remove(model.containers, func(container *docker.ContainerInfo) bool { return container.InspectData.ID == msg.ID })
-		delete(model.containersMap, msg.ID)
-		if model.selected >= len(model.containers) && len(model.containers) > 0 {
-			model.selectUp()
-		}
-		if len(model.containers) == 0 {
-			return model, nil
-		}
-		return model, model.getContainerSelectedCmd()
-	case docker.ContainerUpdateMsg:
-		container, ok := model.containersMap[msg.Inspect.ID]
-		if ok {
-			model.cpuUsages[msg.Inspect.ID] = model.calculateCPUUsage(container.StatsSnapshot, msg.Stats)
-			container.InspectData = msg.Inspect
-			container.Processes = msg.Processes
-			container.StatsSnapshot = msg.Stats
-			return model, nil
-		} else {
-			container = &docker.ContainerInfo{
-				InspectData:   msg.Inspect,
-				StatsSnapshot: msg.Stats,
-				Processes:     make([]docker.Process, 0),
-			}
-			model.containersMap[msg.Inspect.ID] = container
-			model.containers = append(model.containers, container)
-			containers := model.containers
-			sort.Slice(containers, func(i, j int) bool { return containers[i].InspectData.Name < containers[j].InspectData.Name })
-
-			return model, model.getContainerSelectedCmd()
-		}
-	default:
-		return model, nil
-	}
 }
 
 func (model containersList) View() string {
@@ -214,7 +136,8 @@ func (model containersList) View() string {
 		"Cpu%",
 	}
 
-	items, err := slices.Map(model.containers, func(container *docker.ContainerInfo) ([]string, error) {
+	items := make([][]string, len(model.containers))
+	for i, container := range model.containers {
 		cpu, ok := model.cpuUsages[container.InspectData.ID]
 		if !ok {
 			cpu = .0
@@ -230,16 +153,13 @@ func (model containersList) View() string {
 		}
 
 		stack := model.service.Stack()
-		return []string{
+		items[i] = []string{
 			utils.DisplayContainerName(container.InspectData.Name, stack),
 			container.InspectData.Config.Image,
 			container.InspectData.State.Status,
 			ipAddress,
 			fmt.Sprintf("%.2f", cpu),
-		}, nil
-	})
-	if err != nil {
-		panic(err)
+		}
 	}
 
 	body, err := model.table.Render(headers, items, model.width, model.selected, model.scrollPosition, model.height-2)
@@ -252,7 +172,6 @@ func (model containersList) View() string {
 		legend = model.getLegend()
 	}
 
-	// /fmt.Print(len(model.containers))
 	return model.box.Render(
 		[]string{model.label},
 		[]string{legend},
@@ -261,19 +180,102 @@ func (model containersList) View() string {
 	)
 }
 
-func (model containersList) getLegend() string {
-	var legend string
-	switch model.containers[model.selected].InspectData.State.Status {
-	case "running":
-		legend = model.legendShortcutStyle.Render("s") + model.legendStyle.Render("top") + " " +
-			model.legendShortcutStyle.Render("p") + model.legendStyle.Render("ause")
-	case "exited", "dead", "created":
-		legend = model.legendShortcutStyle.Render("s") + model.legendStyle.Render("tart")
-	case "paused":
-		legend = model.legendStyle.Render("un") + model.legendShortcutStyle.Render("p") + model.legendStyle.Render("ause")
+func (model containersList) handleContainerAction(key string) tea.Cmd {
+	switch key {
+	case "s":
+		return func() tea.Msg {
+			selectedContainer := model.containers[model.selected]
+			switch selectedContainer.InspectData.State.Status {
+			case "running":
+				err := model.service.ContainerStop(selectedContainer.InspectData.ID)
+				if err != nil {
+					slog.Error("Error stoping container",
+						"Id", selectedContainer.InspectData.ID,
+						"Error", err)
+				}
+			case "exited", "dead", "created":
+				err := model.service.ContainerStart(selectedContainer.InspectData.ID)
+				if err != nil {
+					slog.Error("Error starting container",
+						"Id", selectedContainer.InspectData.ID,
+						"Error", err)
+				}
+			}
+			return nil
+		}
+	case "p":
+		return func() tea.Msg {
+			selectedContainer := model.containers[model.selected]
+			switch selectedContainer.InspectData.State.Status {
+			case "running":
+				err := model.service.ContainerPause(selectedContainer.InspectData.ID)
+				if err != nil {
+					slog.Error("Error pausing container",
+						"Id", selectedContainer.InspectData.ID,
+						"Error", err)
+				}
+			case "paused":
+				err := model.service.ContainerUnpause(selectedContainer.InspectData.ID)
+				if err != nil {
+					slog.Error("Error unpausing container",
+						"Id", selectedContainer.InspectData.ID,
+						"Error", err)
+				}
+			}
+			return nil
+		}
+	case "l":
+		if len(model.containers) != 0 {
+			selectedContainer := model.containers[model.selected]
+			if selectedContainer.InspectData.State.Status != "" {
+				return tea.Batch(
+					func() tea.Msg {
+						return messages.StartListenningLogsMsg{ContainerID: model.containers[model.selected].InspectData.ID}
+					},
+					func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Logs} },
+				)
+			}
+		}
 	}
+	return nil
+}
 
-	return legend + " " + model.legendShortcutStyle.Render("l") + model.legendStyle.Render("ogs")
+func (model *containersList) handleContainersUpdates(msg docker.ContainerMsg) tea.Cmd {
+	switch msg := msg.(type) {
+	case docker.ContainerRemoveMsg:
+		model.containers = slices.DeleteFunc(model.containers, func(container *docker.ContainerInfo) bool { return container.InspectData.ID == msg.ID })
+		delete(model.containersMap, msg.ID)
+		if model.selected >= len(model.containers) && len(model.containers) > 0 {
+			model.selectUp()
+		}
+		if len(model.containers) == 0 {
+			return nil
+		}
+		return model.getContainerSelectedCmd()
+	case docker.ContainerUpdateMsg:
+		container, ok := model.containersMap[msg.Inspect.ID]
+		if ok {
+			model.cpuUsages[msg.Inspect.ID] = model.calculateCPUUsage(container.StatsSnapshot, msg.Stats)
+			container.InspectData = msg.Inspect
+			container.Processes = msg.Processes
+			container.StatsSnapshot = msg.Stats
+			return nil
+		} else {
+			container = &docker.ContainerInfo{
+				InspectData:   msg.Inspect,
+				StatsSnapshot: msg.Stats,
+				Processes:     make([]docker.Process, 0),
+			}
+			model.containersMap[msg.Inspect.ID] = container
+			model.containers = append(model.containers, container)
+			containers := model.containers
+			sort.Slice(containers, func(i, j int) bool { return containers[i].InspectData.Name < containers[j].InspectData.Name })
+
+			return model.getContainerSelectedCmd()
+		}
+	default:
+		return nil
+	}
 }
 
 func (model *containersList) selectUp() {
@@ -304,11 +306,26 @@ func (model *containersList) selectDown() {
 	}
 }
 
+func (model containersList) getLegend() string {
+	var legend string
+	switch model.containers[model.selected].InspectData.State.Status {
+	case "running":
+		legend = model.legendShortcutStyle.Render("s") + model.legendStyle.Render("top") + " " +
+			model.legendShortcutStyle.Render("p") + model.legendStyle.Render("ause")
+	case "exited", "dead", "created":
+		legend = model.legendShortcutStyle.Render("s") + model.legendStyle.Render("tart")
+	case "paused":
+		legend = model.legendStyle.Render("un") + model.legendShortcutStyle.Render("p") + model.legendStyle.Render("ause")
+	}
+
+	return legend + " " + model.legendShortcutStyle.Render("l") + model.legendStyle.Render("ogs")
+}
+
 func (model containersList) getContainerSelectedCmd() tea.Cmd {
 	if len(model.containers) == 0 && model.selected >= 0 {
 		return nil
 	}
-	return func() tea.Msg { return common.ContainerSelectedMsg{Container: *model.containers[model.selected]} }
+	return func() tea.Msg { return messages.ContainerSelectedMsg{Container: *model.containers[model.selected]} }
 }
 
 func (containersList) calculateCPUUsage(currStats, prevStats docker.ContainerStats) float64 {

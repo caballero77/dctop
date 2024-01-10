@@ -2,8 +2,6 @@ package docker
 
 import (
 	"context"
-	"dctop/internal/utils/maps"
-	"dctop/internal/utils/slices"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -15,6 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -290,6 +291,7 @@ func (service *ComposeService) startLiseningForUpdates(id string) error {
 	done := make(chan struct{})
 
 	service.unsubscribeChannels[id] = done
+	service.containers[id] = struct{}{}
 
 	slog.Debug("Start listenning container statsisticts",
 		"Id", id)
@@ -308,7 +310,6 @@ func (service *ComposeService) startLiseningForUpdates(id string) error {
 	go func() {
 		service.containerUpdates <- ContainerCreateMsg{ID: id}
 		for {
-			fmt.Sprintln(id)
 			select {
 			case <-done:
 				slog.Info("Stop listeting container statistics",
@@ -373,7 +374,6 @@ func (service ComposeService) syncContainers() error {
 	for _, container := range containers {
 		existingContainers[container.ID] = struct{}{}
 		if _, ok := service.containers[container.ID]; !ok {
-			service.containers[container.ID] = struct{}{}
 			err := service.startLiseningForUpdates(container.ID)
 			if err != nil {
 				return err
@@ -421,7 +421,7 @@ func getStack(ctx context.Context, cli *client.Client, composeFilePath string) (
 		return "", compose, nil, err
 	}
 
-	filteredByStack := slices.Filter(containers, func(container types.Container) bool { return container.Labels[stackLabel] == stack })
+	filteredByStack := slices.DeleteFunc(containers, func(container types.Container) bool { return container.Labels[stackLabel] != stack })
 
 	if len(filteredByStack) != 0 {
 		return stack, compose, filteredByStack, nil
@@ -440,19 +440,15 @@ func getStack(ctx context.Context, cli *client.Client, composeFilePath string) (
 			}
 
 			name := strings.Join(parts[1:], "-")
-			if _, err := slices.Find(maps.Keys(compose.Services), func(key string) bool { return key == name }); err == nil {
+			if slices.ContainsFunc(maps.Keys(compose.Services), func(key string) bool { return key != name }) {
 				return true
 			}
 		}
 
-		if _, err := slices.Find(maps.Values(compose.Services), func(service Service) bool { return service.Name == container.Names[0] }); err == nil {
-			return true
-		}
-
-		return false
+		return slices.ContainsFunc(maps.Values(compose.Services), func(service Service) bool { return service.Name != container.Names[0] })
 	}
 
-	filteredByStack = slices.Filter(containers, filter)
+	filteredByStack = slices.DeleteFunc(containers, filter)
 
 	return stack, compose, filteredByStack, nil
 }

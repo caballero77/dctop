@@ -3,16 +3,16 @@ package compose
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/common"
-	"dctop/internal/utils/slices"
+	"dctop/internal/ui/helpers"
+	"dctop/internal/ui/messages"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type top struct {
-	box   *common.BoxWithBorders
-	table *common.Table
+	box   *helpers.BoxWithBorders
+	table *helpers.Table
 
 	containerID       string
 	processes         map[string][]docker.Process
@@ -36,11 +36,9 @@ func newTop(processesListSize int, theme configuration.Theme) top {
 	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
 
 	return top{
-		box:   common.NewBoxWithLabel(theme.Sub("border")),
-		table: common.NewTable(getColumnSizes, theme.Sub("table")),
+		box:   helpers.NewBox(theme.Sub("border")),
+		table: helpers.NewTable(getColumnSizes, theme.Sub("table")),
 
-		selected:          0,
-		scrollPosition:    0,
 		processesListSize: processesListSize,
 		processes:         make(map[string][]docker.Process),
 		label:             labeShortcutStyle.Render("t") + labelStyle.Render("op"),
@@ -53,8 +51,8 @@ func (model top) Init() tea.Cmd {
 
 func (model top) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case common.FocusTabChangedMsg:
-		model.focus = msg.Tab == common.Processes
+	case messages.FocusTabChangedMsg:
+		model.focus = msg.Tab == messages.Processes
 
 		if model.focus {
 			model.selected = 0
@@ -72,25 +70,24 @@ func (model top) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				model.selectDown()
 			}
 		}
-	case common.SizeChangeMsq:
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
-	case common.ContainerSelectedMsg:
+	case messages.ContainerSelectedMsg:
 		model.containerID = msg.Container.InspectData.ID
 	case docker.ContainerMsg:
-		model = model.handleContainersUpdates(msg)
+		model.handleContainersUpdates(msg)
 	}
 	return model, nil
 }
 
-func (model top) handleContainersUpdates(msg docker.ContainerMsg) top {
+func (model *top) handleContainersUpdates(msg docker.ContainerMsg) {
 	switch msg := msg.(type) {
 	case docker.ContainerUpdateMsg:
 		model.processes[msg.Inspect.ID] = msg.Processes
 	case docker.ContainerRemoveMsg:
 		delete(model.processes, msg.ID)
 	}
-	return model
 }
 
 func (model top) View() string {
@@ -112,18 +109,16 @@ func (model top) View() string {
 		"Cpu%",
 	}
 
-	items, err := slices.Map(processes, func(process docker.Process) ([]string, error) {
-		return []string{
+	items := make([][]string, len(processes))
+	for i, process := range processes {
+		items[i] = []string{
 			process.PID,
 			process.PPID,
 			process.CMD,
 			process.Threads,
 			process.RSS,
 			process.CPU,
-		}, nil
-	})
-	if err != nil {
-		panic(err)
+		}
 	}
 
 	selected := -1

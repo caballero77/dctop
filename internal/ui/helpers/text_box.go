@@ -1,23 +1,12 @@
-package common
+package helpers
 
 import (
-	utils_strings "dctop/internal/utils/strings"
+	"dctop/internal/ui/messages"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-type ScrollMsg struct {
-	Change int
-}
-
-type AppendTextMgs struct {
-	Text         string
-	AdjustScroll bool
-}
-
-type ClearTextBoxMsg struct{}
 
 type TextBox struct {
 	width  int
@@ -45,24 +34,24 @@ func (TextBox) Init() tea.Cmd {
 
 func (model TextBox) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case SizeChangeMsq:
+	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
 		model.lines = model.getLines(model.text)
-	case ScrollMsg:
+	case messages.ScrollMsg:
 		if msg.Change > 0 {
 			model = model.ScrollDown(msg.Change)
 		} else if msg.Change < 0 {
 			model = model.ScrollUp(-msg.Change)
 		}
-	case AppendTextMgs:
+	case messages.AppendTextMgs:
 		model.text += msg.Text
 		newLines := model.getLines(msg.Text)
 		model.lines = append(model.lines, newLines...)
 		if msg.AdjustScroll {
 			model = model.ScrollDown(len(newLines))
 		}
-	case ClearTextBoxMsg:
+	case messages.ClearTextBoxMsg:
 		model.lines = []string{}
 		model.text = ""
 		model.scrollPosition = 0
@@ -74,7 +63,7 @@ func (model TextBox) View() string {
 	if model.lines == nil || len(model.lines) == 0 {
 		return lipgloss.Place(model.width-2, model.height, lipgloss.Center, lipgloss.Center, "empty")
 	}
-	height := model.height
+	height := model.height - 1
 	lines := model.lines
 
 	if model.scrollPosition > len(lines)-height {
@@ -84,14 +73,14 @@ func (model TextBox) View() string {
 	var scrollBar string
 	if len(lines) > height {
 		pos := int(float64(model.scrollPosition) * float64(height) / float64(len(lines)-height))
-		var err error
-		scrollBar, err = utils_strings.ReplaceAtIndex(strings.Repeat("\n", height), model.scrollStyle.Render("█"), pos)
-		if err != nil {
-			panic(err)
+		if height == pos {
+			scrollBar = strings.Repeat("\n", height-1) + model.scrollStyle.Render("█")
+		} else {
+			scrollBar = strings.Repeat("\n", pos) + model.scrollStyle.Render("█") + strings.Repeat("\n", height-pos)
 		}
-		lines = lines[model.scrollPosition : model.scrollPosition+height]
+		lines = lines[model.scrollPosition : model.scrollPosition+height+1]
 	} else {
-		scrollBar = strings.Repeat(" \n", height-1)
+		scrollBar = strings.Repeat(" \n", height)
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, model.style.Render(lipgloss.JoinVertical(lipgloss.Left, lines...)), scrollBar)
