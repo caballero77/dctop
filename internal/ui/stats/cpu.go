@@ -7,6 +7,7 @@ import (
 	"dctop/internal/ui/messages"
 	"dctop/internal/utils/queues"
 	"fmt"
+	"log/slog"
 	"math"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,7 +15,7 @@ import (
 )
 
 type cpu struct {
-	box         *helpers.BoxWithBorders
+	box         helpers.BoxWithBorders
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
@@ -75,7 +76,7 @@ func (model *cpu) handleContainersUpdates(msg docker.ContainerMsg) {
 				}
 				err := usage.PushWithLimit(model.calculateCPUUsage(msg.Stats, prevStats), model.width*2)
 				if err != nil {
-					panic(err)
+					slog.Error("error pushing element into queue with limit")
 				}
 			}
 			model.prevContainerStats[msg.Inspect.ID] = msg.Stats
@@ -91,7 +92,12 @@ func (model cpu) View() string {
 	width := model.width - 2
 	height := model.height - 2
 	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
-		return model.box.Render([]string{model.labelStyle.Render("cpu")}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+		return model.box.Render(
+			[]string{model.labelStyle.Render("cpu")},
+			[]string{},
+			lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")),
+			false,
+		)
 	}
 
 	cpuData := cpuUsage.ToArray()
@@ -109,7 +115,13 @@ func (model cpu) View() string {
 
 	currentUsage, err := cpuUsage.Head()
 	if err != nil {
-		panic(err)
+		slog.Error("error getting head from cpu usage queue", err)
+		return model.box.Render(
+			[]string{model.labelStyle.Render("cpu")},
+			[]string{},
+			lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "error rendering cpu usage plot")),
+			false,
+		)
 	}
 	label := model.labelStyle.Render(fmt.Sprintf("cpu: %.2f", currentUsage) + "%")
 

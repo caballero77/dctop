@@ -1,4 +1,4 @@
-package compose
+package stack
 
 import (
 	"dctop/internal/configuration"
@@ -11,8 +11,8 @@ import (
 )
 
 type top struct {
-	box   *helpers.BoxWithBorders
-	table *helpers.Table
+	box   helpers.BoxWithBorders
+	table helpers.Table
 
 	containerID       string
 	processes         map[string][]docker.Process
@@ -126,10 +126,8 @@ func (model top) View() string {
 		selected = model.selected
 	}
 
-	body, err := model.table.Render(headers, items, model.width, selected, model.scrollPosition, model.height)
-	if err != nil {
-		panic(err)
-	}
+	body := model.table.Render(headers, items, model.width, selected, model.scrollPosition, model.height)
+
 	return model.box.Render(
 		[]string{model.label},
 		[]string{},

@@ -2,8 +2,8 @@ package queues
 
 import (
 	"container/list"
-
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
 )
 
 type Queue[T any] struct {
@@ -25,7 +25,7 @@ func (queue *Queue[T]) PushWithLimit(value T, limit int) error {
 	for limit >= 0 && queue.Len() > limit {
 		_, err := queue.Pop()
 		if err != nil {
-			return errors.Wrap(err, "Error pushing value into queue with limit")
+			return fmt.Errorf("error poping element from queue: %w", err)
 		}
 	}
 	return nil
@@ -54,7 +54,7 @@ func (queue Queue[T]) Head() (T, error) {
 	}
 	value, ok := queue.list.Back().Value.(T)
 	if !ok {
-		return value, errors.New("can't canvert value from queue")
+		return value, errors.New("can't convert value from queue")
 	}
 	return value, nil
 }

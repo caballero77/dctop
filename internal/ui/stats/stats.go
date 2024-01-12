@@ -10,9 +10,9 @@ import (
 )
 
 type Stats struct {
-	networkModel     tea.Model
-	ioStatsModel     tea.Model
-	cpuStatsModel    tea.Model
+	network          tea.Model
+	ioStats          tea.Model
+	cpu              tea.Model
 	memoryStatsModel tea.Model
 
 	width  int
@@ -20,20 +20,24 @@ type Stats struct {
 }
 
 func NewStats(theme configuration.Theme) Stats {
+	network := newNetwork(theme.Sub("network"))
+	io := newIO(theme.Sub("io"))
+	cpu := newCPU(theme.Sub("cpu"))
+	memory := newMemory(theme.Sub("memory"))
 	return Stats{
-		networkModel:     newNetwork(theme.Sub("network")),
-		ioStatsModel:     newIO(theme.Sub("io")),
-		cpuStatsModel:    newCPU(theme.Sub("cpu")),
-		memoryStatsModel: newMemory(theme.Sub("memory")),
+		network:          network,
+		ioStats:          io,
+		cpu:              cpu,
+		memoryStatsModel: memory,
 	}
 }
 
 func (model Stats) Init() tea.Cmd {
 	return helpers.Init(
-		model.networkModel,
-		model.ioStatsModel,
+		model.network,
+		model.ioStats,
 		model.memoryStatsModel,
-		model.cpuStatsModel,
+		model.cpu,
 	)
 }
 
@@ -50,33 +54,33 @@ func (model Stats) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 		cmd := tea.Batch(helpers.PassMsgs(
-			helpers.NewModel(model.cpuStatsModel, func(m tea.Model) { model.cpuStatsModel = m }).WithMsg(cpuSize),
+			helpers.NewModel(model.cpu, func(m tea.Model) { model.cpu = m }).WithMsg(cpuSize),
 			helpers.NewModel(model.memoryStatsModel, func(m tea.Model) { model.memoryStatsModel = m }).WithMsg(memorySize),
-			helpers.NewModel(model.networkModel, func(m tea.Model) { model.networkModel = m }).WithMsg(networkSize),
-			helpers.NewModel(model.ioStatsModel, func(m tea.Model) { model.ioStatsModel = m }).WithMsg(ioSize),
+			helpers.NewModel(model.network, func(m tea.Model) { model.network = m }).WithMsg(networkSize),
+			helpers.NewModel(model.ioStats, func(m tea.Model) { model.ioStats = m }).WithMsg(ioSize),
 		))
 		return model, cmd
 	}
 
 	cmds := make([]tea.Cmd, 0)
 	cmds = append(cmds, helpers.PassMsg(msg,
-		helpers.NewModel(model.networkModel, func(m tea.Model) { model.networkModel = m }),
-		helpers.NewModel(model.ioStatsModel, func(m tea.Model) { model.ioStatsModel = m }),
+		helpers.NewModel(model.network, func(m tea.Model) { model.network = m }),
+		helpers.NewModel(model.ioStats, func(m tea.Model) { model.ioStats = m }),
 		helpers.NewModel(model.memoryStatsModel, func(m tea.Model) { model.memoryStatsModel = m }),
-		helpers.NewModel(model.cpuStatsModel, func(m tea.Model) { model.cpuStatsModel = m }),
+		helpers.NewModel(model.cpu, func(m tea.Model) { model.cpu = m }),
 	))
 
 	return model, tea.Batch(cmds...)
 }
 
 func (model Stats) View() string {
-	networkTab := model.networkModel.View()
+	networkTab := model.network.View()
 
-	ioTab := model.ioStatsModel.View()
+	ioTab := model.ioStats.View()
 
 	memoryTab := model.memoryStatsModel.View()
 
-	cpuTab := model.cpuStatsModel.View()
+	cpuTab := model.cpu.View()
 
 	return lipgloss.JoinVertical(
 		lipgloss.Top,

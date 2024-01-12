@@ -1,10 +1,12 @@
-package compose
+package stack
 
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/helpers"
 	"dctop/internal/ui/messages"
+	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -12,7 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type file struct {
+type compose struct {
 	box     helpers.BoxWithBorders
 	text    tea.Model
 	service *docker.ComposeService
@@ -27,10 +29,10 @@ type file struct {
 	legend string
 }
 
-func newComposeFile(path string, theme configuration.Theme, service *docker.ComposeService) file {
+func newCompose(path string, theme configuration.Theme, service *docker.ComposeService) (model compose, err error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
-		panic(err)
+		return model, fmt.Errorf("error reading compose file: %w", err)
 	}
 	composeFile := string(bytes)
 
@@ -42,21 +44,21 @@ func newComposeFile(path string, theme configuration.Theme, service *docker.Comp
 
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
 
-	return file{
+	return compose{
 		text:        helpers.NewTextBox(composeFile, style),
-		box:         *helpers.NewBox(theme.Sub("border")),
+		box:         helpers.NewBox(theme.Sub("border")),
 		service:     service,
 		composeFile: strings.Split(composeFile, "\n"),
 		label:       labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),
 		legend:      legendShortcutStyle.Render("u") + legendStyle.Render("p") + " " + legendShortcutStyle.Render("d") + legendStyle.Render("own"),
-	}
+	}, err
 }
 
-func (file) Init() tea.Cmd {
+func (compose) Init() tea.Cmd {
 	return nil
 }
 
-func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
@@ -98,7 +100,7 @@ func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return model, func() tea.Msg {
 						err := model.service.ComposeUp()
 						if err != nil {
-							panic(err)
+							slog.Error("error performing compose up", "Error", err)
 						}
 						return nil
 					}
@@ -106,7 +108,7 @@ func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return model, func() tea.Msg {
 						err := model.service.ComposeDown()
 						if err != nil {
-							panic(err)
+							slog.Error("error performing compose down", "Error", err)
 						}
 						return nil
 					}
@@ -117,7 +119,7 @@ func (model file) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, tea.Batch(cmds...)
 }
 
-func (model file) View() string {
+func (model compose) View() string {
 	legends := []string{}
 	if model.focus {
 		legends = []string{model.legend}

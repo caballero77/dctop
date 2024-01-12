@@ -3,9 +3,9 @@ package ui
 import (
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
-	"dctop/internal/ui/compose"
 	"dctop/internal/ui/helpers"
 	"dctop/internal/ui/messages"
+	"dctop/internal/ui/stack"
 	"dctop/internal/ui/stats"
 	"fmt"
 
@@ -27,21 +27,29 @@ type UI struct {
 	height int
 }
 
-func NewUI(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) UI {
+func NewUI(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) (ui UI, err error) {
 	updates, err := service.GetContainerUpdates()
 	if err != nil {
-		panic(err)
+		return ui, fmt.Errorf("error getting container updates: %w", err)
 	}
+
+	compose, err := stack.New(config, theme, service)
+	if err != nil {
+		return ui, fmt.Errorf("error creating compose ui model: %w", err)
+	}
+
+	statistics := stats.NewStats(theme)
+
 	return UI{
 		theme:  theme,
 		config: config,
-		stats:  stats.NewStats(theme),
+		stats:  statistics,
 
-		compose:     compose.New(config, theme, service),
+		compose:     compose,
 		selectedTab: messages.Containers,
 		service:     service,
 		updates:     updates,
-	}
+	}, nil
 }
 
 func (model UI) Init() tea.Cmd {

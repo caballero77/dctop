@@ -7,6 +7,7 @@ import (
 	"dctop/internal/ui/messages"
 	"dctop/internal/utils/queues"
 	"fmt"
+	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,7 +15,7 @@ import (
 )
 
 type memory struct {
-	box         *helpers.BoxWithBorders
+	box         helpers.BoxWithBorders
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
@@ -71,7 +72,9 @@ func (model *memory) handleContainersUpdates(msg docker.ContainerMsg) {
 			}
 			err := usage.PushWithLimit(model.calculateMemoruUsage(msg.Stats), model.width*2)
 			if err != nil {
-				panic(err)
+				if err != nil {
+					slog.Error("error pushing element into queue with limit")
+				}
 			}
 		}
 	case docker.ContainerRemoveMsg:
@@ -105,7 +108,13 @@ func (model memory) View() string {
 
 	currentUsageInBytes, err := memoryUsage.Head()
 	if err != nil {
-		panic(err)
+		slog.Error("error getting head from memory usage queue", err)
+		return model.box.Render(
+			[]string{model.labelStyle.Render("cpu")},
+			[]string{},
+			lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "error rendering memory usage plot")),
+			false,
+		)
 	}
 
 	label := model.labelStyle.Render(fmt.Sprintf("memory: %s", humanize.IBytes(uint64(currentUsageInBytes))))

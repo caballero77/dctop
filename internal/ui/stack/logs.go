@@ -1,4 +1,4 @@
-package compose
+package stack
 
 import (
 	"dctop/internal/configuration"
@@ -6,6 +6,7 @@ import (
 	"dctop/internal/ui/helpers"
 	"dctop/internal/ui/messages"
 	"fmt"
+	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -58,7 +59,7 @@ func newLogs(service docker.ComposeService, theme configuration.Theme) logs {
 		stdoutText:          helpers.NewTextBox("", style),
 		stderrText:          helpers.NewTextBox("", style),
 		selectedLogType:     Stdout,
-		box:                 *helpers.NewBox(theme.Sub("border")),
+		box:                 helpers.NewBox(theme.Sub("border")),
 		labelStyle:          labelStyle,
 		labeShortcutStyle:   labeShortcutStyle,
 		legendShortcutStyle: legendShortcutStyle,
@@ -174,7 +175,9 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return
 					case err := <-e:
 						if err.Error() != "EOF" {
-							panic(err)
+							slog.Error("error reading logs",
+								"id", msg.ContainerID,
+								"error", err)
 						}
 					}
 				}

@@ -7,6 +7,7 @@ import (
 	"dctop/internal/ui/messages"
 	"dctop/internal/utils/queues"
 	"fmt"
+	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -19,7 +20,7 @@ type containerIo struct {
 }
 
 type io struct {
-	box         *helpers.BoxWithBorders
+	box         helpers.BoxWithBorders
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
@@ -78,11 +79,11 @@ func (model *io) handleContainersUpdates(msg docker.ContainerMsg) {
 			read, write := model.getIoUsage(&msg.Stats.BlkioStats)
 			err := network.IoRead.PushWithLimit(read, model.width*2)
 			if err != nil {
-				panic(err)
+				slog.Error("error pushing element into queue with limit")
 			}
 			err = network.IoWrite.PushWithLimit(write, model.width*2)
 			if err != nil {
-				panic(err)
+				slog.Error("error pushing element into queue with limit")
 			}
 		}
 	case docker.ContainerRemoveMsg:
@@ -110,21 +111,38 @@ func (model io) View() string {
 		}
 	}
 
-	read := model.RenderIo(ioUsage.IoRead, getLabelRenderer("io read"), width/2, height)
+	read, err := model.RenderIo(ioUsage.IoRead, getLabelRenderer("io read"), width/2, height)
+	if err != nil {
+		slog.Error("error rendering io read plot",
+			"error", err,
+			"id", model.containerID)
+		return model.renderErrorMessage(width, height)
+	}
 
-	write := model.RenderIo(ioUsage.IoWrite, getLabelRenderer("io write"), width/2+width%2, height)
+	write, err := model.RenderIo(ioUsage.IoWrite, getLabelRenderer("io write"), width/2+width%2, height)
+	if err != nil {
+		slog.Error("error rendering io write plot",
+			"error", err,
+			"id", model.containerID)
+		return model.renderErrorMessage(width, height)
+	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Center, read, write)
 }
 
-func (model io) RenderIo(queue *queues.Queue[uint64], label func(string) string, width, height int) string {
+func (model io) RenderIo(queue *queues.Queue[uint64], label func(string) string, width, height int) (string, error) {
 	if queue.Len() <= 1 {
-		return model.box.Render([]string{label("")}, []string{}, lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")), false)
+		return model.box.Render(
+			[]string{label("")},
+			[]string{},
+			lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")),
+			false,
+		), nil
 	}
 
 	total, err := queue.Head()
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("error getting head from io usage queue: %w", err)
 	}
 
 	data, maxRate, currentRate := getRate(queue.ToArray())
@@ -135,7 +153,16 @@ func (model io) RenderIo(queue *queues.Queue[uint64], label func(string) string,
 		model.legendStyle.Render(fmt.Sprintf("max: %s/sec", humanize.IBytes(maxRate))),
 	}
 
-	return model.box.Render([]string{label(humanize.IBytes(currentRate))}, legends, plot, false)
+	return model.box.Render([]string{label(humanize.IBytes(currentRate))}, legends, plot, false), nil
+}
+
+func (model io) renderErrorMessage(height, width int) string {
+	return model.box.Render(
+		[]string{model.labelStyle.Render("cpu")},
+		[]string{},
+		lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "error rendering io usage plot")),
+		false,
+	)
 }
 
 func (io) getIoUsage(stats *docker.BlkioStats) (read, write uint64) {

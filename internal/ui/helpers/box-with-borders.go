@@ -13,7 +13,7 @@ type BoxWithBorders struct {
 	focusColor lipgloss.Color
 }
 
-func NewBox(theme configuration.Theme) *BoxWithBorders {
+func NewBox(theme configuration.Theme) BoxWithBorders {
 	border := lipgloss.Border{
 		Top:         "─",
 		Bottom:      "─",
@@ -26,7 +26,7 @@ func NewBox(theme configuration.Theme) *BoxWithBorders {
 	}
 	color := theme.GetColor("plain")
 	focusColor := theme.GetColor("focus")
-	return &BoxWithBorders{
+	return BoxWithBorders{
 		border:     border,
 		color:      color,
 		focusColor: focusColor,

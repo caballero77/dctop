@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"dctop/internal/configuration"
-	"errors"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -16,7 +15,7 @@ type Table struct {
 	getSizes         func(int) []int
 }
 
-func NewTable(getSizes func(int) []int, theme configuration.Theme) *Table {
+func NewTable(getSizes func(int) []int, theme configuration.Theme) Table {
 	headerCellStyle := lipgloss.
 		NewStyle().
 		Foreground(theme.GetColor("header.foreground")).
@@ -37,7 +36,7 @@ func NewTable(getSizes func(int) []int, theme configuration.Theme) *Table {
 		Foreground(theme.GetColor("scroll.foreground")).
 		Background(theme.GetColor("scroll.background"))
 
-	return &Table{
+	return Table{
 		headerCellStyle:  headerCellStyle,
 		bodyCellStyle:    bodyCellStyle,
 		selectedRowStyle: selectedCellStyle,
@@ -46,29 +45,16 @@ func NewTable(getSizes func(int) []int, theme configuration.Theme) *Table {
 	}
 }
 
-func (table *Table) Render(headerCells []string, rowCells [][]string, width, selected, scrollPosition, height int) (string, error) {
+func (table *Table) Render(headerCells []string, rowCells [][]string, width, selected, scrollPosition, height int) string {
 	width -= 3
 	height--
 
-	var scrollBar string
-	if height > 0 && len(rowCells) > height {
-		pos := int(float64(scrollPosition) * float64(height) / float64(len(rowCells)-height))
-		var newScrollBar string
-		if height == pos {
-			newScrollBar = strings.Repeat("\n", height-1) + "█"
-		} else {
-			newScrollBar = strings.Repeat("\n", pos) + "█" + strings.Repeat("\n", height-pos)
-		}
-		scrollBar = table.scrollStyle.Render(newScrollBar)
+	scrollBar := table.scrollStyle.Render(renderScrollBar(len(rowCells), height, scrollPosition))
+	if len(rowCells) > height {
 		rowCells = rowCells[scrollPosition : scrollPosition+height]
-	} else {
-		scrollBar = table.scrollStyle.Render(strings.Repeat(" \n", len(rowCells)))
 	}
 
 	size := table.getSizes(width)
-	if len(headerCells) != len(size) {
-		return "", errors.New("unexpected header length")
-	}
 
 	header := table.renderCells(headerCells, width, size, table.headerCellStyle)
 
@@ -93,7 +79,7 @@ func (table *Table) Render(headerCells []string, rowCells [][]string, width, sel
 		lipgloss.Bottom,
 		lipgloss.JoinVertical(lipgloss.Left, append([]string{header}, rows...)...),
 		scrollBar,
-	), nil
+	)
 }
 
 func (table Table) renderCells(data []string, width int, size []int, style lipgloss.Style) string {

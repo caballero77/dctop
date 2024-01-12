@@ -1,4 +1,4 @@
-package compose
+package stack
 
 import (
 	"dctop/internal/configuration"
@@ -18,8 +18,8 @@ import (
 )
 
 type containersList struct {
-	box   *helpers.BoxWithBorders
-	table *helpers.Table
+	box   helpers.BoxWithBorders
+	table helpers.Table
 
 	selected           int
 	scrollPosition     int
@@ -39,7 +39,7 @@ type containersList struct {
 	legendShortcutStyle lipgloss.Style
 }
 
-func newContainersList(size int, theme configuration.Theme, service *docker.ComposeService) containersList {
+func newContainersList(size int, theme configuration.Theme, service *docker.ComposeService) (containers containersList, err error) {
 	getColumnSizes := func(width int) []int {
 		return []int{15, width - 46, 10, 15, 6}
 	}
@@ -52,7 +52,7 @@ func newContainersList(size int, theme configuration.Theme, service *docker.Comp
 
 	updates, err := service.GetContainerUpdates()
 	if err != nil {
-		panic(err)
+		return containers, fmt.Errorf("error getting containers updates: %w", err)
 	}
 
 	return containersList{
@@ -69,7 +69,7 @@ func newContainersList(size int, theme configuration.Theme, service *docker.Comp
 		legendStyle:         legendStyle,
 		legendShortcutStyle: legendShortcutStyle,
 		updates:             updates,
-	}
+	}, nil
 }
 
 func (model containersList) Init() tea.Cmd {
@@ -162,10 +162,7 @@ func (model containersList) View() string {
 		}
 	}
 
-	body, err := model.table.Render(headers, items, model.width, model.selected, model.scrollPosition, model.height-2)
-	if err != nil {
-		panic(err)
-	}
+	body := model.table.Render(headers, items, model.width, model.selected, model.scrollPosition, model.height-2)
 
 	legend := ""
 	if model.focus {
@@ -189,16 +186,16 @@ func (model containersList) handleContainerAction(key string) tea.Cmd {
 			case "running":
 				err := model.service.ContainerStop(selectedContainer.InspectData.ID)
 				if err != nil {
-					slog.Error("Error stoping container",
-						"Id", selectedContainer.InspectData.ID,
-						"Error", err)
+					slog.Error("error stoping container",
+						"id", selectedContainer.InspectData.ID,
+						"error", err)
 				}
 			case "exited", "dead", "created":
 				err := model.service.ContainerStart(selectedContainer.InspectData.ID)
 				if err != nil {
-					slog.Error("Error starting container",
-						"Id", selectedContainer.InspectData.ID,
-						"Error", err)
+					slog.Error("error starting container",
+						"id", selectedContainer.InspectData.ID,
+						"error", err)
 				}
 			}
 			return nil
@@ -210,16 +207,16 @@ func (model containersList) handleContainerAction(key string) tea.Cmd {
 			case "running":
 				err := model.service.ContainerPause(selectedContainer.InspectData.ID)
 				if err != nil {
-					slog.Error("Error pausing container",
-						"Id", selectedContainer.InspectData.ID,
-						"Error", err)
+					slog.Error("error pausing container",
+						"id", selectedContainer.InspectData.ID,
+						"error", err)
 				}
 			case "paused":
 				err := model.service.ContainerUnpause(selectedContainer.InspectData.ID)
 				if err != nil {
-					slog.Error("Error unpausing container",
-						"Id", selectedContainer.InspectData.ID,
-						"Error", err)
+					slog.Error("error unpausing container",
+						"id", selectedContainer.InspectData.ID,
+						"error", err)
 				}
 			}
 			return nil

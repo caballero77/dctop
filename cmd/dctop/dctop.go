@@ -51,7 +51,11 @@ func main() {
 	}
 	defer service.Close()
 
-	model := ui.NewUI(config, theme, service)
+	model, err := ui.NewUI(config, theme, service)
+	if err != nil {
+		fmt.Printf("error creating ui model: %v\n", err)
+		slog.Error("error creating ui model: %v", err)
+	}
 
 	output := termenv.NewOutput(os.Stdout)
 	backgroundColor := termenv.BackgroundColor()
@@ -60,7 +64,7 @@ func main() {
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithOutput(output))
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("there's been an error: %v\n", err)
-		slog.Error("there's been an error", "Error", err)
+		slog.Error("there's been an error", "error", err)
 		output.SetBackgroundColor(backgroundColor)
 	}
 

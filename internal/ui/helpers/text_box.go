@@ -63,27 +63,20 @@ func (model TextBox) View() string {
 	if model.lines == nil || len(model.lines) == 0 {
 		return lipgloss.Place(model.width-2, model.height, lipgloss.Center, lipgloss.Center, "empty")
 	}
-	height := model.height - 1
+	height := model.height
 	lines := model.lines
 
-	if model.scrollPosition > len(lines)-height {
-		model.scrollPosition = len(lines) - height
-	}
-
-	var scrollBar string
+	scrollBar := model.scrollStyle.Render(renderScrollBar(len(lines), height, model.scrollPosition))
 	if len(lines) > height {
-		pos := int(float64(model.scrollPosition) * float64(height) / float64(len(lines)-height))
-		if height == pos {
-			scrollBar = strings.Repeat("\n", height-1) + model.scrollStyle.Render("█")
-		} else {
-			scrollBar = strings.Repeat("\n", pos) + model.scrollStyle.Render("█") + strings.Repeat("\n", height-pos)
-		}
-		lines = lines[model.scrollPosition : model.scrollPosition+height+1]
-	} else {
-		scrollBar = strings.Repeat(" \n", height)
+		lines = lines[model.scrollPosition : model.scrollPosition+height]
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Left, model.style.Render(lipgloss.JoinVertical(lipgloss.Left, lines...)), scrollBar)
+	text := model.style.Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+
+	return lipgloss.PlaceVertical(height,
+		lipgloss.Top,
+		lipgloss.JoinHorizontal(lipgloss.Left, text, scrollBar),
+	)
 }
 
 func (model TextBox) Append(value string) (resultModel TextBox, n int) {
