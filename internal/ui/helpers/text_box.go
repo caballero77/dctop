@@ -112,7 +112,7 @@ func (model TextBox) Clear() TextBox {
 	return model
 }
 
-func (model *TextBox) getLines(text string) []string {
+func (model TextBox) getLines(text string) []string {
 	if text == "" || model.height == 0 || model.width == 0 {
 		return []string{}
 	}

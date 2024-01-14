@@ -15,9 +15,9 @@ import (
 )
 
 type compose struct {
-	box     helpers.BoxWithBorders
-	text    tea.Model
-	service *docker.ComposeService
+	box               helpers.BoxWithBorders
+	text              tea.Model
+	containersService docker.ComposeService
 
 	width  int
 	height int
@@ -29,8 +29,8 @@ type compose struct {
 	legend string
 }
 
-func newCompose(path string, theme configuration.Theme, service *docker.ComposeService) (model compose, err error) {
-	bytes, err := os.ReadFile(path)
+func newCompose(theme configuration.Theme, containersService docker.ComposeService) (model compose, err error) {
+	bytes, err := os.ReadFile(containersService.FilePath())
 	if err != nil {
 		return model, fmt.Errorf("error reading compose file: %w", err)
 	}
@@ -45,12 +45,12 @@ func newCompose(path string, theme configuration.Theme, service *docker.ComposeS
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
 
 	return compose{
-		text:        helpers.NewTextBox(composeFile, style),
-		box:         helpers.NewBox(theme.Sub("border")),
-		service:     service,
-		composeFile: strings.Split(composeFile, "\n"),
-		label:       labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),
-		legend:      legendShortcutStyle.Render("u") + legendStyle.Render("p") + " " + legendShortcutStyle.Render("d") + legendStyle.Render("own"),
+		text:              helpers.NewTextBox(composeFile, style),
+		box:               helpers.NewBox(theme.Sub("border")),
+		containersService: containersService,
+		composeFile:       strings.Split(composeFile, "\n"),
+		label:             labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),
+		legend:            legendShortcutStyle.Render("u") + legendStyle.Render("p") + " " + legendShortcutStyle.Render("d") + legendStyle.Render("own"),
 	}, err
 }
 
@@ -98,7 +98,7 @@ func (model compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch string(msg.Runes) {
 				case "u":
 					return model, func() tea.Msg {
-						err := model.service.ComposeUp()
+						err := model.containersService.ComposeUp()
 						if err != nil {
 							slog.Error("error performing compose up", "Error", err)
 						}
@@ -106,7 +106,7 @@ func (model compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				case "d":
 					return model, func() tea.Msg {
-						err := model.service.ComposeDown()
+						err := model.containersService.ComposeDown()
 						if err != nil {
 							slog.Error("error performing compose down", "Error", err)
 						}

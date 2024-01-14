@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui"
@@ -44,14 +45,20 @@ func main() {
 
 	composeFilePath := os.Args[1]
 
-	service, err := docker.ProvideComposeService(composeFilePath)
+	composeService, err := docker.NewComposeService(composeFilePath)
 	if err != nil {
-		fmt.Printf("error creating docker compose service: %v\n", err)
-		slog.Error("error creating docker compose service: %v", err)
+		fmt.Printf("error creating compose service: %v\n", err)
+		slog.Error("error creating compose service: %v", err)
 	}
-	defer service.Close()
 
-	model, err := ui.NewUI(config, theme, service)
+	containersService, err := docker.NewContainersService(context.Background(), composeService.Stack())
+	if err != nil {
+		fmt.Printf("error creating docker service: %v\n", err)
+		slog.Error("error creating docker service: %v", err)
+	}
+	defer containersService.Close()
+
+	model, err := ui.NewUI(config, theme, containersService, composeService)
 	if err != nil {
 		fmt.Printf("error creating ui model: %v\n", err)
 		slog.Error("error creating ui model: %v", err)

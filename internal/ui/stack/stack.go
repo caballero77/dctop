@@ -24,20 +24,20 @@ type Stack struct {
 	logs       tea.Model
 }
 
-func New(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) (stack Stack, err error) {
+func New(config *viper.Viper, theme configuration.Theme, containersService docker.ContainersService, composeService docker.ComposeService) (stack Stack, err error) {
 	top := newTop(config.GetInt(configuration.ProcessesListHeightName), theme.Sub("processes"))
 
-	compose, err := newCompose(service.ComposeFilePath(), theme.Sub("file"), service)
+	compose, err := newCompose(theme.Sub("file"), composeService)
 	if err != nil {
 		return stack, fmt.Errorf("error creating compose file model: %w", err)
 	}
 
-	containers, err := newContainersList(config.GetInt(configuration.ContainersListHeigthName), theme.Sub("containers"), service)
+	containers, err := newContainersList(config.GetInt(configuration.ContainersListHeigthName), theme.Sub("containers"), containersService)
 	if err != nil {
 		return stack, fmt.Errorf("error creating containers list model: %w", err)
 	}
 
-	logs := newLogs(*service, theme.Sub("logs"))
+	logs := newLogs(containersService, theme.Sub("logs"))
 
 	return Stack{
 		containers: containers,

@@ -20,20 +20,19 @@ type UI struct {
 	stats       tea.Model
 	compose     tea.Model
 	selectedTab messages.Tab
-	service     *docker.ComposeService
 	updates     chan docker.ContainerMsg
 
 	width  int
 	height int
 }
 
-func NewUI(config *viper.Viper, theme configuration.Theme, service *docker.ComposeService) (ui UI, err error) {
-	updates, err := service.GetContainerUpdates()
+func NewUI(config *viper.Viper, theme configuration.Theme, containersService docker.ContainersService, composeService docker.ComposeService) (ui UI, err error) {
+	updates, err := containersService.GetContainerUpdates()
 	if err != nil {
 		return ui, fmt.Errorf("error getting container updates: %w", err)
 	}
 
-	compose, err := stack.New(config, theme, service)
+	compose, err := stack.New(config, theme, containersService, composeService)
 	if err != nil {
 		return ui, fmt.Errorf("error creating compose ui model: %w", err)
 	}
@@ -47,7 +46,6 @@ func NewUI(config *viper.Viper, theme configuration.Theme, service *docker.Compo
 
 		compose:     compose,
 		selectedTab: messages.Containers,
-		service:     service,
 		updates:     updates,
 	}, nil
 }

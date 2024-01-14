@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"context"
 	"dctop/internal/configuration"
 	"dctop/internal/docker"
 	"dctop/internal/ui/helpers"
@@ -35,18 +36,18 @@ type logs struct {
 	labeShortcutStyle   lipgloss.Style
 	legendStyle         lipgloss.Style
 	legendShortcutStyle lipgloss.Style
-	service             docker.ComposeService
+	containersService   docker.ContainersService
 
 	width  int
 	height int
 
-	done     chan bool
+	cancel   func()
 	updates  chan LogsAddedMsg
 	open     bool
 	selected bool
 }
 
-func newLogs(service docker.ComposeService, theme configuration.Theme) logs {
+func newLogs(containersService docker.ContainersService, theme configuration.Theme) logs {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
 
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
@@ -64,7 +65,7 @@ func newLogs(service docker.ComposeService, theme configuration.Theme) logs {
 		labeShortcutStyle:   labeShortcutStyle,
 		legendShortcutStyle: legendShortcutStyle,
 		legendStyle:         legendStyle,
-		service:             service,
+		containersService:   containersService,
 		updates:             make(chan LogsAddedMsg),
 	}
 }
@@ -162,8 +163,9 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.StartListenningLogsMsg:
 		if !model.open {
 			model.open = true
-			stdout, stderr, e, done := model.service.GetContainerLogs(msg.ContainerID, "100")
-			model.done = done
+			ctx, cancel := context.WithCancel(context.Background())
+			stdout, stderr, e := model.containersService.GetContainerLogs(ctx, msg.ContainerID, "100")
+			model.cancel = cancel
 			go func() {
 				for {
 					select {
@@ -171,10 +173,8 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						model.updates <- LogsAddedMsg{LogType: Stdout, Message: log}
 					case log := <-stderr:
 						model.updates <- LogsAddedMsg{LogType: Stderr, Message: log}
-					case <-done:
-						return
 					case err := <-e:
-						if err.Error() != "EOF" {
+						if err != nil && err.Error() != "EOF" {
 							slog.Error("error reading logs",
 								"id", msg.ContainerID,
 								"error", err)
@@ -230,7 +230,7 @@ func (model *logs) close() tea.Cmd {
 		return nil
 	}
 	model.open = false
-	close(model.done)
+	model.cancel()
 
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd

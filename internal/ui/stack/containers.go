@@ -28,7 +28,7 @@ type containersList struct {
 	containersMap      map[string]*docker.ContainerInfo
 	cpuUsages          map[string]float64
 	focus              bool
-	service            *docker.ComposeService
+	containersService  docker.ContainersService
 	updates            chan docker.ContainerMsg
 
 	width  int
@@ -39,7 +39,7 @@ type containersList struct {
 	legendShortcutStyle lipgloss.Style
 }
 
-func newContainersList(size int, theme configuration.Theme, service *docker.ComposeService) (containers containersList, err error) {
+func newContainersList(size int, theme configuration.Theme, containersService docker.ContainersService) (containers containersList, err error) {
 	getColumnSizes := func(width int) []int {
 		return []int{15, width - 46, 10, 15, 6}
 	}
@@ -50,7 +50,7 @@ func newContainersList(size int, theme configuration.Theme, service *docker.Comp
 	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
 	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
 
-	updates, err := service.GetContainerUpdates()
+	updates, err := containersService.GetContainerUpdates()
 	if err != nil {
 		return containers, fmt.Errorf("error getting containers updates: %w", err)
 	}
@@ -61,7 +61,7 @@ func newContainersList(size int, theme configuration.Theme, service *docker.Comp
 
 		containersListSize: size,
 		containers:         []*docker.ContainerInfo{},
-		service:            service,
+		containersService:  containersService,
 		containersMap:      make(map[string]*docker.ContainerInfo),
 		cpuUsages:          make(map[string]float64),
 
@@ -152,7 +152,7 @@ func (model containersList) View() string {
 			ipAddress = strings.Repeat("-", 15)
 		}
 
-		stack := model.service.Stack()
+		stack := model.containersService.Stack()
 		items[i] = []string{
 			utils.DisplayContainerName(container.InspectData.Name, stack),
 			container.InspectData.Config.Image,
@@ -184,14 +184,14 @@ func (model containersList) handleContainerAction(key string) tea.Cmd {
 			selectedContainer := model.containers[model.selected]
 			switch selectedContainer.InspectData.State.Status {
 			case "running":
-				err := model.service.ContainerStop(selectedContainer.InspectData.ID)
+				err := model.containersService.ContainerStop(selectedContainer.InspectData.ID)
 				if err != nil {
 					slog.Error("error stoping container",
 						"id", selectedContainer.InspectData.ID,
 						"error", err)
 				}
 			case "exited", "dead", "created":
-				err := model.service.ContainerStart(selectedContainer.InspectData.ID)
+				err := model.containersService.ContainerStart(selectedContainer.InspectData.ID)
 				if err != nil {
 					slog.Error("error starting container",
 						"id", selectedContainer.InspectData.ID,
@@ -205,14 +205,14 @@ func (model containersList) handleContainerAction(key string) tea.Cmd {
 			selectedContainer := model.containers[model.selected]
 			switch selectedContainer.InspectData.State.Status {
 			case "running":
-				err := model.service.ContainerPause(selectedContainer.InspectData.ID)
+				err := model.containersService.ContainerPause(selectedContainer.InspectData.ID)
 				if err != nil {
 					slog.Error("error pausing container",
 						"id", selectedContainer.InspectData.ID,
 						"error", err)
 				}
 			case "paused":
-				err := model.service.ContainerUnpause(selectedContainer.InspectData.ID)
+				err := model.containersService.ContainerUnpause(selectedContainer.InspectData.ID)
 				if err != nil {
 					slog.Error("error unpausing container",
 						"id", selectedContainer.InspectData.ID,
