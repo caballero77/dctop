@@ -45,7 +45,7 @@ func NewTable(getSizes func(int) []int, theme configuration.Theme) Table {
 	}
 }
 
-func (table *Table) Render(headerCells []string, rowCells [][]string, width, selected, scrollPosition, height int) string {
+func (table Table) Render(headerCells []string, rowCells [][]string, width, selected, scrollPosition, height int) string {
 	width -= 3
 	height--
 

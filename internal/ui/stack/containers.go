@@ -233,6 +233,15 @@ func (model containersList) handleContainerAction(key string) tea.Cmd {
 				)
 			}
 		}
+	case "i":
+		if len(model.containers) != 0 {
+			selectedContainer := model.containers[model.selected]
+			if selectedContainer.InspectData.State.Status != "" {
+				return tea.Batch(
+					func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Inspect} },
+				)
+			}
+		}
 	}
 	return nil
 }
@@ -315,7 +324,9 @@ func (model containersList) getLegend() string {
 		legend = model.legendStyle.Render("un") + model.legendShortcutStyle.Render("p") + model.legendStyle.Render("ause")
 	}
 
-	return legend + " " + model.legendShortcutStyle.Render("l") + model.legendStyle.Render("ogs")
+	return legend + " " +
+		model.legendShortcutStyle.Render("l") + model.legendStyle.Render("ogs") + " " +
+		model.legendShortcutStyle.Render("i") + model.legendStyle.Render("nspect")
 }
 
 func (model containersList) getContainerSelectedCmd() tea.Cmd {

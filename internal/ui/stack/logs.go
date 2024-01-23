@@ -25,8 +25,6 @@ type LogsAddedMsg struct {
 	LogType LogType
 }
 
-type CloseLogsMsg struct{}
-
 type logs struct {
 	box                 helpers.BoxWithBorders
 	stdoutText          tea.Model
@@ -102,20 +100,16 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case CloseLogsMsg:
-		cmd = model.close()
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+	case messages.CloseTabMsg:
+		if msg.Tab == messages.Logs {
+			cmd = model.close()
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 	case tea.KeyMsg:
 		if model.selected {
 			switch msg.Type {
-			case tea.KeyEsc:
-				cmd = model.close()
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
 			case tea.KeyUp:
 				if model.selectedLogType == Stdout {
 					model.stdoutText, cmd = model.stdoutText.Update(messages.ScrollMsg{Change: -1})
@@ -159,7 +153,14 @@ func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, model.waitForLogs())
 	case messages.FocusTabChangedMsg:
-		model.selected = msg.Tab == messages.Logs
+		if msg.Tab.IsDetailsTab() && msg.Tab != messages.Logs {
+			cmd = model.close()
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		} else {
+			model.selected = msg.Tab == messages.Logs
+		}
 	case messages.StartListenningLogsMsg:
 		if !model.open {
 			model.open = true

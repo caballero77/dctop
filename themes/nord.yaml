@@ -57,8 +57,18 @@ file:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"
 
-
 logs:
+  title:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+  border:
+    plain: "#434C5E"
+    focus: "#8FBCBB"
+  legend:
+    plain: "#8FBCBB"
+    shortcut: "#5E81AC"
+
+inspect:
   title:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"
