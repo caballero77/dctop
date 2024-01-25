@@ -40,16 +40,24 @@ func (model TextBox) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.lines = model.getLines(model.text)
 	case messages.ScrollMsg:
 		if msg.Change > 0 {
-			model = model.ScrollDown(msg.Change)
+			model = model.scrollDown(msg.Change)
 		} else if msg.Change < 0 {
-			model = model.ScrollUp(-msg.Change)
+			model = model.scrollUp(-msg.Change)
+		}
+	case messages.SetTextMgs:
+		model.text = msg.Text
+		model.lines = model.getLines(msg.Text)
+		if msg.ResetScroll {
+			model.scrollPosition = 0
+		} else {
+			model = model.adjustScroll()
 		}
 	case messages.AppendTextMgs:
 		model.text += msg.Text
 		newLines := model.getLines(msg.Text)
 		model.lines = append(model.lines, newLines...)
 		if msg.AdjustScroll {
-			model = model.ScrollDown(len(newLines))
+			model = model.scrollDown(len(newLines))
 		}
 	case messages.ClearTextBoxMsg:
 		model.lines = []string{}
@@ -79,17 +87,7 @@ func (model TextBox) View() string {
 	)
 }
 
-func (model TextBox) Append(value string) (resultModel TextBox, n int) {
-	if value != "" {
-		model.text += value
-		newLines := model.getLines(value)
-		model.lines = append(model.lines, newLines...)
-		return model, len(newLines)
-	}
-	return model, 0
-}
-
-func (model TextBox) ScrollUp(n int) TextBox {
+func (model TextBox) scrollUp(n int) TextBox {
 	if n <= 0 {
 		return model
 	}
@@ -97,7 +95,7 @@ func (model TextBox) ScrollUp(n int) TextBox {
 	return model
 }
 
-func (model TextBox) ScrollDown(n int) TextBox {
+func (model TextBox) scrollDown(n int) TextBox {
 	if n <= 0 {
 		return model
 	}
@@ -105,10 +103,12 @@ func (model TextBox) ScrollDown(n int) TextBox {
 	return model
 }
 
-func (model TextBox) Clear() TextBox {
-	model.lines = []string{}
-	model.text = ""
-	model.scrollPosition = 0
+func (model TextBox) adjustScroll() TextBox {
+	if model.scrollPosition < 0 {
+		model.scrollPosition = 0
+	} else if model.scrollPosition > len(model.lines)-model.height {
+		model.scrollPosition = len(model.lines) - model.height
+	}
 	return model
 }
 
@@ -123,13 +123,13 @@ func (model TextBox) getLines(text string) []string {
 		if line == "" {
 			continue
 		}
-		for len(line) > width {
+		for lipgloss.Width(line) > width {
 			lines = append(lines, line[:width])
 			j++
 			line = line[width:]
 		}
 		if line != "" {
-			lines = append(lines, line+strings.Repeat(" ", width-len(line)))
+			lines = append(lines, line+strings.Repeat(" ", width-lipgloss.Width(line)))
 			j++
 		}
 	}

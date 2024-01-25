@@ -58,6 +58,8 @@ file:
     shortcut: "#5E81AC"
 
 logs:
+  body:
+    text: "#81A1C1"
   title:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"
@@ -69,6 +71,9 @@ logs:
     shortcut: "#5E81AC"
 
 inspect:
+  body:
+    title: "#81A1C1"
+    text: "#81A1C1"
   title:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"

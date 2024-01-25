@@ -24,4 +24,9 @@ type AppendTextMgs struct {
 	AdjustScroll bool
 }
 
+type SetTextMgs struct {
+	Text        string
+	ResetScroll bool
+}
+
 type ClearTextBoxMsg struct{}

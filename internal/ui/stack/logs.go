@@ -46,7 +46,7 @@ type logs struct {
 }
 
 func newLogs(containersService docker.ContainersService, theme configuration.Theme) logs {
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
+	style := lipgloss.NewStyle().Foreground(theme.GetColor("body.text"))
 
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
 	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
