@@ -134,7 +134,7 @@ func (model inspect) view() string {
 
 	var buffer bytes.Buffer
 
-	divider := strings.Repeat("_", model.width-3)
+	divider := strings.Repeat("⣀", model.width-3)
 
 	buffer.WriteString(lipgloss.PlaceHorizontal(model.width-3, lipgloss.Center, "General Info") + "\n")
 	buffer.WriteString(fmt.Sprintf("Name: %s", data.Name) + "\n")
