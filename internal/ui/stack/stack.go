@@ -22,6 +22,10 @@ type Stack struct {
 	top        tea.Model
 	compose    tea.Model
 	logs       tea.Model
+	inspect    tea.Model
+
+	activeDetailsTab messages.Tab
+	activeTab        messages.Tab
 }
 
 func New(config *viper.Viper, theme configuration.Theme, containersService docker.ContainersService, composeService docker.ComposeService) (stack Stack, err error) {
@@ -38,13 +42,17 @@ func New(config *viper.Viper, theme configuration.Theme, containersService docke
 	}
 
 	logs := newLogs(containersService, theme.Sub("logs"))
+	inspect := newInspect(theme.Sub("inspect"))
 
 	return Stack{
-		containers: containers,
-		top:        top,
-		logs:       logs,
-		compose:    compose,
-		config:     config,
+		containers:       containers,
+		top:              top,
+		logs:             logs,
+		inspect:          inspect,
+		compose:          compose,
+		config:           config,
+		activeDetailsTab: messages.Compose,
+		activeTab:        messages.Containers,
 	}, nil
 }
 
@@ -56,6 +64,7 @@ func (model Stack) Init() tea.Cmd {
 			model.top,
 			model.logs,
 			model.compose,
+			model.inspect,
 		),
 	)
 }
@@ -64,9 +73,20 @@ func (model Stack) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.Type == tea.KeyEsc {
+			if model.activeDetailsTab == model.activeTab {
+				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
+			}
+
+			tabToClose := model.activeDetailsTab
+			cmds = append(cmds, func() tea.Msg { return messages.CloseTabMsg{Tab: tabToClose} })
+			model.activeDetailsTab = messages.Compose
+		}
 	case messages.FocusTabChangedMsg:
-		if msg.Tab == messages.Compose {
-			cmds = append(cmds, func() tea.Msg { return CloseLogsMsg{} })
+		model.activeTab = msg.Tab
+		if msg.Tab.IsDetailsTab() {
+			model.activeDetailsTab = msg.Tab
 		}
 	case messages.SizeChangeMsq:
 		model.width = msg.Width
@@ -86,6 +106,7 @@ func (model Stack) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			helpers.NewModel(model.top, func(m tea.Model) { model.top = m }).WithMsg(topSize),
 			helpers.NewModel(model.logs, func(m tea.Model) { model.logs = m }).WithMsg(dynamicTabSize),
 			helpers.NewModel(model.compose, func(m tea.Model) { model.compose = m }).WithMsg(dynamicTabSize),
+			helpers.NewModel(model.inspect, func(m tea.Model) { model.inspect = m }).WithMsg(dynamicTabSize),
 		))
 		return model, cmd
 	}
@@ -95,6 +116,7 @@ func (model Stack) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		helpers.NewModel(model.top, func(m tea.Model) { model.top = m }),
 		helpers.NewModel(model.logs, func(m tea.Model) { model.logs = m }),
 		helpers.NewModel(model.compose, func(m tea.Model) { model.compose = m }),
+		helpers.NewModel(model.inspect, func(m tea.Model) { model.inspect = m }),
 	)
 	cmds = append(cmds, cmd)
 
@@ -106,26 +128,32 @@ func (model Stack) View() string {
 
 	processesTab := model.top.View()
 
-	logs := model.logs.View()
-
-	compose := model.compose.View()
-
-	var composeColumn string
-	if logs == "" {
-		composeColumn = lipgloss.JoinVertical(
+	switch model.activeDetailsTab {
+	case messages.Compose:
+		compose := model.compose.View()
+		return lipgloss.JoinVertical(
 			lipgloss.Top,
 			containersTab,
 			processesTab,
 			compose,
 		)
-	} else {
-		composeColumn = lipgloss.JoinVertical(
+	case messages.Logs:
+		logs := model.logs.View()
+		return lipgloss.JoinVertical(
 			lipgloss.Top,
 			containersTab,
 			processesTab,
 			logs,
 		)
+	case messages.Inspect:
+		inspect := model.inspect.View()
+		return lipgloss.JoinVertical(
+			lipgloss.Top,
+			containersTab,
+			processesTab,
+			inspect,
+		)
+	default:
+		return ""
 	}
-
-	return composeColumn
 }
