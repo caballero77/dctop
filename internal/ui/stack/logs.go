@@ -26,7 +26,6 @@ type LogsAddedMsg struct {
 }
 
 type logs struct {
-	box                 helpers.BoxWithBorders
 	stdoutText          tea.Model
 	stderrText          tea.Model
 	selectedLogType     LogType
@@ -45,7 +44,7 @@ type logs struct {
 	selected bool
 }
 
-func newLogs(containersService docker.ContainersService, theme configuration.Theme) logs {
+func newLogs(containersService docker.ContainersService, theme configuration.Theme) tea.Model {
 	style := lipgloss.NewStyle().Foreground(theme.GetColor("body.text"))
 
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
@@ -54,11 +53,10 @@ func newLogs(containersService docker.ContainersService, theme configuration.The
 	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
 	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
 
-	return logs{
+	model := logs{
 		stdoutText:          helpers.NewTextBox("", style),
 		stderrText:          helpers.NewTextBox("", style),
 		selectedLogType:     Stdout,
-		box:                 helpers.NewBox(theme.Sub("border")),
 		labelStyle:          labelStyle,
 		labeShortcutStyle:   labeShortcutStyle,
 		legendShortcutStyle: legendShortcutStyle,
@@ -66,13 +64,41 @@ func newLogs(containersService docker.ContainersService, theme configuration.The
 		containersService:   containersService,
 		updates:             make(chan LogsAddedMsg),
 	}
+
+	return helpers.NewBox(model, theme.Sub("border"))
 }
+
+// Focus implements helpers.BoxedModel.
+func (model logs) Focus() bool { return model.open }
+
+// Labels implements helpers.BoxedModel.
+func (model logs) Labels() []string {
+	return []string{model.labeShortcutStyle.Render("L") + model.labelStyle.Render(fmt.Sprintf("ogs: %s", model.selectedLogType))}
+}
+
+// Legends implements helpers.BoxedModel.
+func (model logs) Legends() []string {
+	var stdout string
+	var stderr string
+
+	if model.selectedLogType == Stdout {
+		stdout = model.legendShortcutStyle.Copy().Bold(true).Render("¹") + model.legendStyle.Copy().Bold(true).Render("stdout")
+		stderr = model.legendShortcutStyle.Render("²") + model.legendStyle.Render("stderr")
+	} else {
+		stdout = model.legendShortcutStyle.Render("¹") + model.legendStyle.Render("stdout")
+		stderr = model.legendShortcutStyle.Copy().Bold(true).Render("²") + model.legendStyle.Copy().Bold(true).Render("stderr")
+	}
+
+	return []string{stdout + " " + stderr}
+}
+
+func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return model.UpdateAsBoxed(msg) }
 
 func (logs) Init() tea.Cmd {
 	return nil
 }
 
-func (model logs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model logs) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
@@ -193,9 +219,6 @@ func (model logs) View() string {
 	if !model.open {
 		return ""
 	}
-	labels := []string{model.label()}
-	legends := []string{model.legend()}
-
 	var text string
 
 	if model.selectedLogType == Stdout {
@@ -204,26 +227,7 @@ func (model logs) View() string {
 		text = model.stderrText.View()
 	}
 
-	return model.box.Render(labels, legends, text, model.open)
-}
-
-func (model logs) label() string {
-	return model.labeShortcutStyle.Render("L") + model.labelStyle.Render(fmt.Sprintf("ogs: %s", model.selectedLogType))
-}
-
-func (model logs) legend() string {
-	var stdout string
-	var stderr string
-
-	if model.selectedLogType == Stdout {
-		stdout = model.legendShortcutStyle.Copy().Bold(true).Render("¹") + model.legendStyle.Copy().Bold(true).Render("stdout")
-		stderr = model.legendShortcutStyle.Render("²") + model.legendStyle.Render("stderr")
-	} else {
-		stdout = model.legendShortcutStyle.Render("¹") + model.legendStyle.Render("stdout")
-		stderr = model.legendShortcutStyle.Copy().Bold(true).Render("²") + model.legendStyle.Copy().Bold(true).Render("stderr")
-	}
-
-	return stdout + " " + stderr
+	return text
 }
 
 func (model *logs) close() tea.Cmd {

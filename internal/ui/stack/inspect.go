@@ -16,7 +16,6 @@ import (
 )
 
 type inspect struct {
-	box  helpers.BoxWithBorders
 	text tea.Model
 
 	inspects          map[string]types.ContainerJSON
@@ -29,22 +28,29 @@ type inspect struct {
 	height int
 }
 
-func newInspect(theme configuration.Theme) inspect {
+func newInspect(theme configuration.Theme) tea.Model {
 	label := lipgloss.NewStyle().Foreground(theme.GetColor("title.shortcut")).Render("I") +
 		lipgloss.NewStyle().Foreground(theme.GetColor("title.plain")).Render("nspect")
-	return inspect{
-		box:      helpers.NewBox(theme.Sub("border")),
+	model := inspect{
 		text:     helpers.NewTextBox("", lipgloss.NewStyle().Foreground(theme.GetColor("body.text"))),
 		inspects: make(map[string]types.ContainerJSON),
 		label:    label,
 	}
+
+	return helpers.NewBox(model, theme.Sub("border"))
 }
 
-func (inspect) Init() tea.Cmd {
-	return nil
-}
+func (model inspect) Focus() bool { return model.focus }
 
-func (model inspect) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model inspect) Labels() []string { return []string{model.label} }
+
+func (inspect) Legends() []string { return []string{} }
+
+func (model inspect) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return model.UpdateAsBoxed(msg) }
+
+func (inspect) Init() tea.Cmd { return nil }
+
+func (model inspect) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
@@ -118,12 +124,7 @@ func (model inspect) handleContainersUpdates(msg docker.ContainerMsg) (inspect, 
 }
 
 func (model inspect) View() string {
-	return model.box.Render(
-		[]string{model.label},
-		[]string{},
-		model.text.View(),
-		model.focus,
-	)
+	return model.text.View()
 }
 
 func (model inspect) view() string {

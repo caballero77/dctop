@@ -5,6 +5,7 @@ import (
 	"dctop/internal/docker"
 	"dctop/internal/ui/helpers"
 	"dctop/internal/ui/messages"
+	"dctop/internal/ui/stats/drawing"
 	"dctop/internal/utils/queues"
 	"fmt"
 	"log/slog"
@@ -15,7 +16,6 @@ import (
 )
 
 type cpu struct {
-	box         helpers.BoxWithBorders
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
@@ -29,9 +29,8 @@ type cpu struct {
 	height int
 }
 
-func newCPU(theme configuration.Theme) cpu {
-	return cpu{
-		box:         helpers.NewBox(theme.Sub("border")),
+func newCPU(theme configuration.Theme) tea.Model {
+	model := cpu{
 		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
@@ -40,13 +39,51 @@ func newCPU(theme configuration.Theme) cpu {
 		prevContainerStats: make(map[string]docker.ContainerStats),
 		scaling:            []int{15, 25, 35, 45, 55, 65, 75, 100},
 	}
+
+	return helpers.NewBox(model, theme.Sub("border"))
 }
+
+func (cpu) Focus() bool { return false }
+
+func (model cpu) Labels() []string {
+	cpuUsage, ok := model.cpuUsages[model.containerID]
+	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
+		return []string{model.labelStyle.Render("cpu")}
+	}
+
+	currentUsage, err := cpuUsage.Head()
+	if err != nil {
+		return []string{model.labelStyle.Render("cpu")}
+	}
+
+	return []string{model.labelStyle.Render(fmt.Sprintf("cpu: %.2f", currentUsage) + "%")}
+}
+
+func (model cpu) Legends() []string {
+	cpuUsage, ok := model.cpuUsages[model.containerID]
+	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
+		return []string{}
+	}
+
+	cpuData := cpuUsage.ToArray()
+	max := 0.0
+	for _, value := range cpuData {
+		if max < value {
+			max = value
+		}
+	}
+	scale := model.calculateScalingKoeficient(max)
+
+	return []string{model.legendStyle.Render(fmt.Sprintf("scale: %d", int(math.Round(scale*100))) + "%")}
+}
+
+func (model cpu) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return model.UpdateAsBoxed(msg) }
 
 func (cpu) Init() tea.Cmd {
 	return nil
 }
 
-func (model cpu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model cpu) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case messages.ContainerSelectedMsg:
 		model.containerID = msg.Container.InspectData.ID
@@ -92,12 +129,7 @@ func (model cpu) View() string {
 	width := model.width - 2
 	height := model.height - 2
 	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
-		return model.box.Render(
-			[]string{model.labelStyle.Render("cpu")},
-			[]string{},
-			lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")),
-			false,
-		)
+		return lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data"))
 	}
 
 	cpuData := cpuUsage.ToArray()
@@ -109,23 +141,7 @@ func (model cpu) View() string {
 	}
 	scale := model.calculateScalingKoeficient(max)
 
-	plot := model.plotStyles.Render(renderPlot(cpuData, scale, width, height))
-
-	legend := model.legendStyle.Render(fmt.Sprintf("scale: %d", int(math.Round(scale*100))) + "%")
-
-	currentUsage, err := cpuUsage.Head()
-	if err != nil {
-		slog.Error("error getting head from cpu usage queue", err)
-		return model.box.Render(
-			[]string{model.labelStyle.Render("cpu")},
-			[]string{},
-			lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "error rendering cpu usage plot")),
-			false,
-		)
-	}
-	label := model.labelStyle.Render(fmt.Sprintf("cpu: %.2f", currentUsage) + "%")
-
-	return model.box.Render([]string{label}, []string{legend}, plot, false)
+	return model.plotStyles.Render(drawing.RenderPlot(cpuData, scale, width, height))
 }
 
 func (model cpu) calculateScalingKoeficient(maxValue float64) float64 {

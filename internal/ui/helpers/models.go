@@ -27,7 +27,6 @@ func PassMsg(msg tea.Msg, models ...Model) tea.Cmd {
 		var newModel tea.Model
 		newModel, cmds[i] = value.model.Update(msg)
 		value.setter(newModel)
-
 	}
 	return tea.Batch(cmds...)
 }

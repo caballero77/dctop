@@ -18,7 +18,6 @@ import (
 )
 
 type containersList struct {
-	box   helpers.BoxWithBorders
 	table helpers.Table
 
 	selected           int
@@ -39,7 +38,7 @@ type containersList struct {
 	legendShortcutStyle lipgloss.Style
 }
 
-func newContainersList(size int, theme configuration.Theme, containersService docker.ContainersService) (containers containersList, err error) {
+func newContainersList(size int, theme configuration.Theme, containersService docker.ContainersService) (tea.Model, error) {
 	getColumnSizes := func(width int) []int {
 		return []int{15, width - 46, 10, 15, 6}
 	}
@@ -52,11 +51,11 @@ func newContainersList(size int, theme configuration.Theme, containersService do
 
 	updates, err := containersService.GetContainerUpdates()
 	if err != nil {
-		return containers, fmt.Errorf("error getting containers updates: %w", err)
+		var model containersList
+		return model, fmt.Errorf("error getting containers updates: %w", err)
 	}
 
-	return containersList{
-		box:   helpers.NewBox(theme.Sub("border")),
+	model := containersList{
 		table: helpers.NewTable(getColumnSizes, theme.Sub("table")),
 
 		containersListSize: size,
@@ -69,7 +68,25 @@ func newContainersList(size int, theme configuration.Theme, containersService do
 		legendStyle:         legendStyle,
 		legendShortcutStyle: legendShortcutStyle,
 		updates:             updates,
-	}, nil
+	}
+
+	return helpers.NewBox(model, theme.Sub("border")), nil
+}
+
+func (model containersList) Focus() bool { return model.focus }
+
+func (model containersList) Labels() []string { return []string{model.label} }
+
+func (model containersList) Legends() []string {
+	if model.focus {
+		return []string{model.getLegend()}
+	}
+
+	return []string{}
+}
+
+func (model containersList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return model.UpdateAsBoxed(msg)
 }
 
 func (model containersList) Init() tea.Cmd {
@@ -78,7 +95,7 @@ func (model containersList) Init() tea.Cmd {
 	}
 }
 
-func (model containersList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model containersList) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -121,12 +138,7 @@ func (model containersList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (model containersList) View() string {
 	if len(model.containers) == 0 || model.width == 0 || model.height == 0 {
-		return model.box.Render(
-			[]string{model.label},
-			[]string{},
-			lipgloss.Place(model.width-2, model.height-2, lipgloss.Center, lipgloss.Center, "Can't find any containers associated with selected compose file"),
-			model.focus,
-		)
+		return lipgloss.Place(model.width-2, model.height-2, lipgloss.Center, lipgloss.Center, "Can't find any containers associated with selected compose file")
 	}
 	headers := []string{
 		"Name",
@@ -162,19 +174,7 @@ func (model containersList) View() string {
 		}
 	}
 
-	body := model.table.Render(headers, items, model.width, model.selected, model.scrollPosition, model.height-2)
-
-	legend := ""
-	if model.focus {
-		legend = model.getLegend()
-	}
-
-	return model.box.Render(
-		[]string{model.label},
-		[]string{legend},
-		body,
-		model.focus,
-	)
+	return model.table.Render(headers, items, model.width, model.selected, model.scrollPosition, model.height-2)
 }
 
 func (model containersList) handleContainerAction(key string) tea.Cmd {
@@ -313,6 +313,9 @@ func (model *containersList) selectDown() {
 }
 
 func (model containersList) getLegend() string {
+	if model.selected >= len(model.containers) {
+		return ""
+	}
 	var legend string
 	switch model.containers[model.selected].InspectData.State.Status {
 	case "running":

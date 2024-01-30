@@ -27,7 +27,7 @@ type top struct {
 	label string
 }
 
-func newTop(processesListSize int, theme configuration.Theme) top {
+func newTop(processesListSize int, theme configuration.Theme) tea.Model {
 	getColumnSizes := func(width int) []int {
 		return []int{7, 7, width - 39, 8, 10, 5}
 	}
@@ -35,21 +35,30 @@ func newTop(processesListSize int, theme configuration.Theme) top {
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain"))
 	labeShortcutStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.shortcut"))
 
-	return top{
-		box:   helpers.NewBox(theme.Sub("border")),
+	model := top{
 		table: helpers.NewTable(getColumnSizes, theme.Sub("table")),
 
 		processesListSize: processesListSize,
 		processes:         make(map[string][]docker.Process),
 		label:             labeShortcutStyle.Render("t") + labelStyle.Render("op"),
 	}
+
+	return helpers.NewBox(model, theme.Sub("border"))
 }
+
+func (model top) Focus() bool { return model.focus }
+
+func (model top) Labels() []string { return []string{model.label} }
+
+func (model top) Legends() []string { return []string{} }
+
+func (model top) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return model.UpdateAsBoxed(msg) }
 
 func (model top) Init() tea.Cmd {
 	return nil
 }
 
-func (model top) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (model top) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case messages.FocusTabChangedMsg:
 		model.focus = msg.Tab == messages.Processes
@@ -93,12 +102,7 @@ func (model *top) handleContainersUpdates(msg docker.ContainerMsg) {
 func (model top) View() string {
 	processes, ok := model.processes[model.containerID]
 	if !ok || len(model.processes) == 0 {
-		return model.box.Render(
-			[]string{model.label},
-			[]string{},
-			lipgloss.Place(model.width-2, model.height, lipgloss.Center, lipgloss.Center, "no data"),
-			model.focus,
-		)
+		return lipgloss.Place(model.width-2, model.height, lipgloss.Center, lipgloss.Center, "no data")
 	}
 	headers := []string{
 		"Pid",
@@ -126,14 +130,7 @@ func (model top) View() string {
 		selected = model.selected
 	}
 
-	body := model.table.Render(headers, items, model.width, selected, model.scrollPosition, model.height)
-
-	return model.box.Render(
-		[]string{model.label},
-		[]string{},
-		body,
-		model.focus,
-	)
+	return model.table.Render(headers, items, model.width, selected, model.scrollPosition, model.height)
 }
 
 func (model *top) selectUp() {

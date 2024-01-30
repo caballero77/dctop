@@ -4,16 +4,31 @@ import (
 	"dctop/internal/configuration"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+type BoxedModel interface {
+	tea.Model
+
+	Legends() []string
+	Labels() []string
+	Focus() bool
+	UpdateAsBoxed(msg tea.Msg) (BoxedModel, tea.Cmd)
+}
+
+type UpdateLabelsMsg struct {
+	Labels []string
+}
+
 type BoxWithBorders struct {
+	innerModel BoxedModel
 	border     lipgloss.Border
 	color      lipgloss.Color
 	focusColor lipgloss.Color
 }
 
-func NewBox(theme configuration.Theme) BoxWithBorders {
+func NewBox(model BoxedModel, theme configuration.Theme) BoxWithBorders {
 	border := lipgloss.Border{
 		Top:         "─",
 		Bottom:      "─",
@@ -30,16 +45,31 @@ func NewBox(theme configuration.Theme) BoxWithBorders {
 		border:     border,
 		color:      color,
 		focusColor: focusColor,
+		innerModel: model,
 	}
 }
 
-func (b BoxWithBorders) Render(labels, legends []string, content string, focus bool) string {
-	borderColor := b.color
+func (model BoxWithBorders) Init() tea.Cmd {
+	return model.innerModel.Init()
+}
+
+func (model BoxWithBorders) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	model.innerModel, cmd = model.innerModel.UpdateAsBoxed(msg)
+	return model, cmd
+}
+
+func (model BoxWithBorders) View() string {
+	labels := model.innerModel.Labels()
+	legends := model.innerModel.Legends()
+	focus := model.innerModel.Focus()
+
+	borderColor := model.color
 	if focus {
-		borderColor = b.focusColor
+		borderColor = model.focusColor
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor).BorderForeground(borderColor)
-	border := b.border
+	border := model.border
 
 	topLeft := borderStyle.Render(border.TopLeft)
 	topRight := borderStyle.Render(border.TopRight)
@@ -49,9 +79,11 @@ func (b BoxWithBorders) Render(labels, legends []string, content string, focus b
 	bottomRight := borderStyle.Render(border.BottomRight)
 	bottom := borderStyle.Render(border.Bottom)
 
+	content := model.innerModel.View()
+
 	width := lipgloss.Width(content)
 
-	borderWidth := lipgloss.NewStyle().Border(b.border).GetHorizontalBorderSize()
+	borderWidth := lipgloss.NewStyle().Border(model.border).GetHorizontalBorderSize()
 
 	var topBorder string
 	if len(labels) == 0 {
@@ -77,7 +109,7 @@ func (b BoxWithBorders) Render(labels, legends []string, content string, focus b
 		bottomBorder = bottomLeft + bottom + legend + borderStyle.Render(gap) + bottomRight
 	}
 
-	middle := borderStyle.Border(b.border).
+	middle := borderStyle.Border(model.border).
 		BorderTop(false).
 		BorderBottom(false).
 		Width(width).

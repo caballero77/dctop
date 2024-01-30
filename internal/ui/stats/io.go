@@ -5,47 +5,36 @@ import (
 	"dctop/internal/docker"
 	"dctop/internal/ui/helpers"
 	"dctop/internal/ui/messages"
-	"dctop/internal/utils/queues"
-	"fmt"
-	"log/slog"
+	"dctop/internal/ui/stats/rate"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dustin/go-humanize"
+	"golang.org/x/exp/maps"
 )
 
-type containerIo struct {
-	IoRead  *queues.Queue[uint64]
-	IoWrite *queues.Queue[uint64]
-}
-
 type io struct {
-	box         helpers.BoxWithBorders
-	plotStyles  lipgloss.Style
-	labelStyle  lipgloss.Style
-	legendStyle lipgloss.Style
-	scaling     []int
+	theme configuration.Theme
 
 	containerID string
-	ioUsages    map[string]containerIo
+
+	read  map[string]tea.Model
+	write map[string]tea.Model
 
 	width  int
 	height int
 }
 
-func newIO(theme configuration.Theme) io {
+func newIO(theme configuration.Theme) tea.Model {
 	return io{
-		box:         helpers.NewBox(theme.Sub("border")),
-		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
-		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
-		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		ioUsages:    make(map[string]containerIo),
-		scaling:     []int{15, 25, 35, 45, 55, 65, 75, 100},
+		read:  make(map[string]tea.Model),
+		write: make(map[string]tea.Model),
+		theme: theme,
 	}
 }
 
 func (model io) Init() tea.Cmd {
-	return nil
+	models := append(maps.Values(model.read), maps.Values(model.read)...)
+	return helpers.Init(models...)
 }
 
 func (model io) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -57,7 +46,24 @@ func (model io) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
+
+		models := make([]helpers.Model, 0, len(model.read)+len(model.write))
+
+		for key, read := range model.read {
+			key := key
+			models = append(models, helpers.NewModel(read, func(m tea.Model) { model.read[key] = m }))
+		}
+
+		for key, write := range model.write {
+			key := key
+			models = append(models, helpers.NewModel(write, func(m tea.Model) { model.write[key] = m }))
+		}
+
+		return model, helpers.PassMsg(messages.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height},
+			models...,
+		)
 	}
+
 	return model, nil
 }
 
@@ -66,103 +72,46 @@ func (model *io) handleContainersUpdates(msg docker.ContainerMsg) {
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
 		case "removing", "exited", "dead", "":
-			delete(model.ioUsages, msg.Inspect.ID)
+			delete(model.read, msg.Inspect.ID)
+			delete(model.write, msg.Inspect.ID)
 		case "restarting", "paused", "running", "created":
-			network, ok := model.ioUsages[msg.Inspect.ID]
+			readModel, ok := model.read[msg.Inspect.ID]
 			if !ok {
-				network = containerIo{
-					IoRead:  queues.New[uint64](),
-					IoWrite: queues.New[uint64](),
-				}
-				model.ioUsages[msg.Inspect.ID] = network
+				readModel, _ = rate.New[uint64]("io read", model.theme).
+					Update(messages.SizeChangeMsq{Width: model.width / 2, Height: model.height})
 			}
+
+			writeModel, ok := model.write[msg.Inspect.ID]
+			if !ok {
+				writeModel, _ = rate.New[uint64]("io write", model.theme).
+					Update(messages.SizeChangeMsq{Width: model.width / 2, Height: model.height})
+			}
+
 			read, write := model.getIoUsage(&msg.Stats.BlkioStats)
-			err := network.IoRead.PushWithLimit(read, model.width*2)
-			if err != nil {
-				slog.Error("error pushing element into queue with limit")
-			}
-			err = network.IoWrite.PushWithLimit(write, model.width*2)
-			if err != nil {
-				slog.Error("error pushing element into queue with limit")
-			}
+
+			model.read[msg.Inspect.ID], _ = readModel.Update(rate.PushMsg[uint64]{Value: read})
+			model.write[msg.Inspect.ID], _ = writeModel.Update(rate.PushMsg[uint64]{Value: write})
 		}
 	case docker.ContainerRemoveMsg:
-		delete(model.ioUsages, msg.ID)
+		delete(model.read, msg.ID)
+		delete(model.write, msg.ID)
 	}
 }
 
 func (model io) View() string {
-	width := model.width - 4
-	height := model.height - 2
-	ioUsage, ok := model.ioUsages[model.containerID]
+	readModel, ok := model.read[model.containerID]
 	if !ok {
-		ioUsage = containerIo{
-			IoRead:  queues.New[uint64](),
-			IoWrite: queues.New[uint64](),
-		}
+		readModel, _ = rate.New[uint64]("io read", model.theme).
+			Update(messages.SizeChangeMsq{Width: model.width / 2, Height: model.height})
 	}
 
-	getLabelRenderer := func(networkType string) func(string) string {
-		return func(current string) string {
-			if current == "" {
-				return model.labelStyle.Render(networkType)
-			}
-			return model.labelStyle.Render(fmt.Sprintf("%s: %s/sec", networkType, current))
-		}
+	writeModel, ok := model.write[model.containerID]
+	if !ok {
+		writeModel, _ = rate.New[uint64]("io read", model.theme).
+			Update(messages.SizeChangeMsq{Width: model.width / 2, Height: model.height})
 	}
 
-	read, err := model.RenderIo(ioUsage.IoRead, getLabelRenderer("io read"), width/2, height)
-	if err != nil {
-		slog.Error("error rendering io read plot",
-			"error", err,
-			"id", model.containerID)
-		return model.renderErrorMessage(width, height)
-	}
-
-	write, err := model.RenderIo(ioUsage.IoWrite, getLabelRenderer("io write"), width/2+width%2, height)
-	if err != nil {
-		slog.Error("error rendering io write plot",
-			"error", err,
-			"id", model.containerID)
-		return model.renderErrorMessage(width, height)
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Center, read, write)
-}
-
-func (model io) RenderIo(queue *queues.Queue[uint64], label func(string) string, width, height int) (string, error) {
-	if queue.Len() <= 1 {
-		return model.box.Render(
-			[]string{label("")},
-			[]string{},
-			lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data")),
-			false,
-		), nil
-	}
-
-	total, err := queue.Head()
-	if err != nil {
-		return "", fmt.Errorf("error getting head from io usage queue: %w", err)
-	}
-
-	data, maxRate, currentRate := getRate(queue.ToArray())
-	plot := model.plotStyles.Render(renderPlot(data, 1, width, height))
-
-	legends := []string{
-		model.legendStyle.Render(fmt.Sprintf("total: %s", humanize.IBytes(total))),
-		model.legendStyle.Render(fmt.Sprintf("max: %s/sec", humanize.IBytes(maxRate))),
-	}
-
-	return model.box.Render([]string{label(humanize.IBytes(currentRate))}, legends, plot, false), nil
-}
-
-func (model io) renderErrorMessage(height, width int) string {
-	return model.box.Render(
-		[]string{model.labelStyle.Render("cpu")},
-		[]string{},
-		lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "error rendering io usage plot")),
-		false,
-	)
+	return lipgloss.JoinHorizontal(lipgloss.Center, readModel.View(), writeModel.View())
 }
 
 func (io) getIoUsage(stats *docker.BlkioStats) (read, write uint64) {

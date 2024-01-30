@@ -15,7 +15,6 @@ import (
 )
 
 type compose struct {
-	box               helpers.BoxWithBorders
 	text              tea.Model
 	containersService docker.ComposeService
 
@@ -29,10 +28,10 @@ type compose struct {
 	legend string
 }
 
-func newCompose(theme configuration.Theme, containersService docker.ComposeService) (model compose, err error) {
+func newCompose(theme configuration.Theme, containersService docker.ComposeService) (tea.Model, error) {
 	bytes, err := os.ReadFile(containersService.FilePath())
 	if err != nil {
-		return model, fmt.Errorf("error reading compose file: %w", err)
+		return nil, fmt.Errorf("error reading compose file: %w", err)
 	}
 	composeFile := string(bytes)
 
@@ -44,21 +43,38 @@ func newCompose(theme configuration.Theme, containersService docker.ComposeServi
 
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
 
-	return compose{
+	model := compose{
 		text:              helpers.NewTextBox(composeFile, style),
-		box:               helpers.NewBox(theme.Sub("border")),
 		containersService: containersService,
 		composeFile:       strings.Split(composeFile, "\n"),
 		label:             labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),
 		legend:            legendShortcutStyle.Render("u") + legendStyle.Render("p") + " " + legendShortcutStyle.Render("d") + legendStyle.Render("own"),
-	}, err
+	}
+
+	return helpers.NewBox(model, theme.Sub("border")), nil
 }
 
 func (compose) Init() tea.Cmd {
 	return nil
 }
 
+func (model compose) Focus() bool { return model.focus }
+
+func (model compose) Labels() []string { return []string{model.label} }
+
+func (model compose) Legends() []string {
+	if model.focus {
+		return []string{model.legend}
+	} else {
+		return []string{}
+	}
+}
+
 func (model compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return model.UpdateAsBoxed(msg)
+}
+
+func (model compose) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
@@ -120,9 +136,5 @@ func (model compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model compose) View() string {
-	legends := []string{}
-	if model.focus {
-		legends = []string{model.legend}
-	}
-	return model.box.Render([]string{model.label}, legends, model.text.View(), model.focus)
+	return model.text.View()
 }
