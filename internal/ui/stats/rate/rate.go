@@ -7,6 +7,7 @@ import (
 	"dctop/internal/ui/stats/drawing"
 	"dctop/internal/utils/queues"
 	"fmt"
+	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -96,7 +97,13 @@ func (model *Model[T]) push(value T) {
 	}
 	model.total = value
 
-	model.data.Push(value)
+	err := model.data.PushWithLimit(value, model.width*2)
+	if err != nil {
+		slog.Error("Error pushing value in queue with limit",
+			"component", model.name,
+			"limit", model.width*2,
+			"error", err)
+	}
 }
 
 func getRate[T number](data []T) []float64 {

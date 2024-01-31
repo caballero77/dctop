@@ -20,7 +20,7 @@ type TextBox struct {
 	scrollPosition int
 }
 
-func NewTextBox(text string, style lipgloss.Style) TextBox {
+func NewTextBox(text string, style lipgloss.Style) tea.Model {
 	return TextBox{
 		text:        text,
 		style:       style,
