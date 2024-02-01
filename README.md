@@ -1,4 +1,6 @@
 
+<p align="center"><img src="https://github.com/caballero77/dctop/blob/main/dctop.png" alt="MarineGEO circle logo" style="width: 280px;"/></p>
+
 # dctop
 
 Docker Compose resource monitor that outputs containers cpu, memory, network, io usage and top processes.
