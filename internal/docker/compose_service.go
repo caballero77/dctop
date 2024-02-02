@@ -36,7 +36,7 @@ func (service ComposeService) Stack() string { return service.stack }
 func (service ComposeService) FilePath() string { return service.composePath }
 
 func (service ComposeService) ComposeDown() error {
-	slog.Debug("Executing down comand on compose file")
+	slog.Debug("Executing down command on compose file")
 
 	cmd := exec.Command("docker-compose", "-f", service.composePath, "down") // #nosec G204
 	if err := cmd.Run(); err != nil {
@@ -47,7 +47,7 @@ func (service ComposeService) ComposeDown() error {
 }
 
 func (service ComposeService) ComposeUp() error {
-	slog.Debug("Executing up comand on compose file")
+	slog.Debug("Executing up command on compose file")
 
 	cmd := exec.Command("docker-compose", "-f", service.composePath, "up", "-d") // #nosec G204
 	if err := cmd.Run(); err != nil {
@@ -68,7 +68,7 @@ func getStack(composePath string) (stack string, compose Compose, err error) {
 
 	err = yaml.Unmarshal(bytes, &compose)
 	if err != nil {
-		return "", compose, fmt.Errorf("error unmarchaling compose file data: %w", err)
+		return "", compose, fmt.Errorf("error unmarshaling compose file data: %w", err)
 	}
 
 	return stack, compose, nil
