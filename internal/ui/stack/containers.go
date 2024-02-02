@@ -178,6 +178,10 @@ func (model containersList) View() string {
 }
 
 func (model containersList) handleContainerAction(key string) tea.Cmd {
+	if len(model.containers) == 0 {
+		return nil
+	}
+
 	switch key {
 	case "s":
 		return func() tea.Msg {
