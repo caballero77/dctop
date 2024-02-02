@@ -116,12 +116,12 @@ func (model io) View() string {
 
 func (io) getIoUsage(stats *docker.BlkioStats) (read, write uint64) {
 	for i := 0; i < len(stats.IoServiceBytesRecursive); i++ {
-		curr := stats.IoServiceBytesRecursive[i]
-		switch curr.Operation {
+		current := stats.IoServiceBytesRecursive[i]
+		switch current.Operation {
 		case "read":
-			read += uint64(curr.Value)
+			read += uint64(current.Value)
 		case "write":
-			write += uint64(curr.Value)
+			write += uint64(current.Value)
 		}
 	}
 	return read, write

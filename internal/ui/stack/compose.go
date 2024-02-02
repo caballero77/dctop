@@ -75,12 +75,12 @@ func (model compose) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (model compose) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
+	commands := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
 	model.text, cmd = model.text.Update(msg)
 	if cmd != nil {
-		cmds = append(cmds, cmd)
+		commands = append(commands, cmd)
 	}
 
 	switch msg := msg.(type) {
@@ -92,7 +92,7 @@ func (model compose) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 
 		model.text, cmd = model.text.Update(messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
 		if cmd != nil {
-			cmds = append(cmds, cmd)
+			commands = append(commands, cmd)
 		}
 	case tea.KeyMsg:
 		if model.focus {
@@ -100,16 +100,16 @@ func (model compose) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 			case tea.KeyUp:
 				model.text, cmd = model.text.Update(messages.ScrollMsg{Change: -1})
 				if cmd != nil {
-					cmds = append(cmds, cmd)
+					commands = append(commands, cmd)
 				}
 			case tea.KeyDown:
 				model.text, cmd = model.text.Update(messages.ScrollMsg{Change: 1})
 				if cmd != nil {
-					cmds = append(cmds, cmd)
+					commands = append(commands, cmd)
 				}
 			case tea.KeyRunes:
 				if !model.focus {
-					return model, tea.Batch(cmds...)
+					return model, tea.Batch(commands...)
 				}
 				switch string(msg.Runes) {
 				case "u":
@@ -132,7 +132,7 @@ func (model compose) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 			}
 		}
 	}
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model compose) View() string {

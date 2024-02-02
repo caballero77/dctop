@@ -11,7 +11,6 @@ import (
 )
 
 type top struct {
-	box   helpers.BoxWithBorders
 	table helpers.Table
 
 	containerID       string

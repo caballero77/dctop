@@ -11,7 +11,7 @@ type ContainerSelectedMsg struct {
 	Container docker.ContainerInfo
 }
 
-type StartListenningLogsMsg struct {
+type StartListeningLogsMsg struct {
 	ContainerID string
 }
 

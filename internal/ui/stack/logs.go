@@ -99,17 +99,17 @@ func (logs) Init() tea.Cmd {
 }
 
 func (model logs) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
+	commands := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
 	model.stdoutText, cmd = model.stdoutText.Update(msg)
 	if cmd != nil {
-		cmds = append(cmds, cmd)
+		commands = append(commands, cmd)
 	}
 
 	model.stderrText, cmd = model.stderrText.Update(msg)
 	if cmd != nil {
-		cmds = append(cmds, cmd)
+		commands = append(commands, cmd)
 	}
 
 	switch msg := msg.(type) {
@@ -119,18 +119,18 @@ func (model logs) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 
 		model.stdoutText, cmd = model.stdoutText.Update(messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
 		if cmd != nil {
-			cmds = append(cmds, cmd)
+			commands = append(commands, cmd)
 		}
 
 		model.stderrText, cmd = model.stderrText.Update(messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
 		if cmd != nil {
-			cmds = append(cmds, cmd)
+			commands = append(commands, cmd)
 		}
 	case messages.CloseTabMsg:
 		if msg.Tab == messages.Logs {
 			cmd = model.close()
 			if cmd != nil {
-				cmds = append(cmds, cmd)
+				commands = append(commands, cmd)
 			}
 		}
 	case tea.KeyMsg:
@@ -143,7 +143,7 @@ func (model logs) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 					model.stderrText, cmd = model.stderrText.Update(messages.ScrollMsg{Change: -1})
 				}
 				if cmd != nil {
-					cmds = append(cmds, cmd)
+					commands = append(commands, cmd)
 				}
 			case tea.KeyDown:
 				if model.selectedLogType == Stdout {
@@ -152,7 +152,7 @@ func (model logs) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 					model.stderrText, cmd = model.stderrText.Update(messages.ScrollMsg{Change: 1})
 				}
 				if cmd != nil {
-					cmds = append(cmds, cmd)
+					commands = append(commands, cmd)
 				}
 			case tea.KeyRunes:
 				switch string(msg.Runes) {
@@ -169,25 +169,25 @@ func (model logs) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 		case Stdout:
 			model.stdoutText, cmd = model.stdoutText.Update(messages.AppendTextMgs{Text: string(msg.Message), AdjustScroll: true})
 			if cmd != nil {
-				cmds = append(cmds, cmd)
+				commands = append(commands, cmd)
 			}
 		case Stderr:
 			model.stderrText, cmd = model.stderrText.Update(messages.AppendTextMgs{Text: string(msg.Message), AdjustScroll: true})
 			if cmd != nil {
-				cmds = append(cmds, cmd)
+				commands = append(commands, cmd)
 			}
 		}
-		cmds = append(cmds, model.waitForLogs())
+		commands = append(commands, model.waitForLogs())
 	case messages.FocusTabChangedMsg:
 		if msg.Tab.IsDetailsTab() && msg.Tab != messages.Logs {
 			cmd = model.close()
 			if cmd != nil {
-				cmds = append(cmds, cmd)
+				commands = append(commands, cmd)
 			}
 		} else {
 			model.selected = msg.Tab == messages.Logs
 		}
-	case messages.StartListenningLogsMsg:
+	case messages.StartListeningLogsMsg:
 		if !model.open {
 			model.open = true
 			ctx, cancel := context.WithCancel(context.Background())
@@ -209,10 +209,10 @@ func (model logs) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 					}
 				}
 			}()
-			cmds = append(cmds, model.waitForLogs())
+			commands = append(commands, model.waitForLogs())
 		}
 	}
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model logs) View() string {

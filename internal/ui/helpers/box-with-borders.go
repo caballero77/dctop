@@ -103,7 +103,7 @@ func (model BoxWithBorders) View() string {
 		bottomBorder = bottomLeft + borderStyle.Render(gap) + bottomRight
 	} else {
 		sep := borderStyle.Render(border.Top)
-		legend := strings.Join(adjustLegendLegth(legends, width), sep)
+		legend := strings.Join(adjustLegendLength(legends, width), sep)
 		cellsShort := max(0, width+borderWidth-lipgloss.Width(bottomLeft+bottomRight+legend+bottom))
 		gap := strings.Repeat(border.Top, cellsShort)
 		bottomBorder = bottomLeft + bottom + legend + borderStyle.Render(gap) + bottomRight
@@ -118,7 +118,7 @@ func (model BoxWithBorders) View() string {
 	return topBorder + "\n" + middle + "\n" + bottomBorder
 }
 
-func adjustLegendLegth(legends []string, width int) []string {
+func adjustLegendLength(legends []string, width int) []string {
 	length := 0
 	for _, legend := range legends {
 		length += lipgloss.Width(legend)

@@ -58,11 +58,11 @@ func (model UI) Init() tea.Cmd {
 }
 
 func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
+	commands := make([]tea.Cmd, 0)
 
 	switch msg := msg.(type) {
 	case docker.ContainerMsg:
-		cmds = append(cmds, waitForActivity(model.updates))
+		commands = append(commands, waitForActivity(model.updates))
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
@@ -70,39 +70,39 @@ func (model UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyRunes:
 			switch string(msg.Runes) {
 			case "c":
-				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
+				commands = append(commands, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
 			case "t":
-				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Processes} })
+				commands = append(commands, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Processes} })
 			case "f":
-				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Compose} })
+				commands = append(commands, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Compose} })
 			}
 		}
 	case tea.WindowSizeMsg:
 		model.width = msg.Width
 		model.height = msg.Height
 
-		var stastMsg, composeMsg messages.SizeChangeMsq
+		var statsMsg, composeMsg messages.SizeChangeMsq
 
 		switch {
 		case model.height >= 30 && model.width >= 150 || true:
-			stastMsg = messages.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
+			statsMsg = messages.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
 			composeMsg = messages.SizeChangeMsq{Width: msg.Width / 2, Height: msg.Height}
 		case model.width < 150:
-			stastMsg = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
+			statsMsg = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
 			composeMsg = messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height / 2}
 		}
 
 		return model, helpers.PassMsgs(
 			helpers.NewModel(model.compose, func(m tea.Model) { model.compose = m }).WithMsg(composeMsg),
-			helpers.NewModel(model.stats, func(m tea.Model) { model.stats = m }).WithMsg(stastMsg),
+			helpers.NewModel(model.stats, func(m tea.Model) { model.stats = m }).WithMsg(statsMsg),
 		)
 	}
-	cmds = append(cmds, helpers.PassMsg(msg,
+	commands = append(commands, helpers.PassMsg(msg,
 		helpers.NewModel(model.compose, func(m tea.Model) { model.compose = m }),
 		helpers.NewModel(model.stats, func(m tea.Model) { model.stats = m }),
 	))
 
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model UI) View() string {

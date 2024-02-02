@@ -190,7 +190,7 @@ func (model containersList) handleContainerAction(key string) tea.Cmd {
 			case "running":
 				err := model.containersService.ContainerStop(selectedContainer.InspectData.ID)
 				if err != nil {
-					slog.Error("error stoping container",
+					slog.Error("error stopping container",
 						"id", selectedContainer.InspectData.ID,
 						"error", err)
 				}
@@ -231,7 +231,7 @@ func (model containersList) handleContainerAction(key string) tea.Cmd {
 			if selectedContainer.InspectData.State.Status != "" {
 				return tea.Batch(
 					func() tea.Msg {
-						return messages.StartListenningLogsMsg{ContainerID: model.containers[model.selected].InspectData.ID}
+						return messages.StartListeningLogsMsg{ContainerID: model.containers[model.selected].InspectData.ID}
 					},
 					func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Logs} },
 				)
@@ -343,15 +343,15 @@ func (model containersList) getContainerSelectedCmd() tea.Cmd {
 	return func() tea.Msg { return messages.ContainerSelectedMsg{Container: *model.containers[model.selected]} }
 }
 
-func (containersList) calculateCPUUsage(currStats, prevStats docker.ContainerStats) float64 {
+func (containersList) calculateCPUUsage(currentStats, prevStats docker.ContainerStats) float64 {
 	var (
 		cpuPercent  = 0.0
-		cpuDelta    = float64(currStats.CPUStats.CPUUsage.TotalUsage) - float64(prevStats.CPUStats.CPUUsage.TotalUsage)
-		systemDelta = float64(currStats.CPUStats.SystemCPUUsage) - float64(prevStats.CPUStats.SystemCPUUsage)
+		cpuDelta    = float64(currentStats.CPUStats.CPUUsage.TotalUsage) - float64(prevStats.CPUStats.CPUUsage.TotalUsage)
+		systemDelta = float64(currentStats.CPUStats.SystemCPUUsage) - float64(prevStats.CPUStats.SystemCPUUsage)
 	)
 
 	if systemDelta != 0.0 && cpuDelta != 0.0 {
-		cpuPercent = (cpuDelta / systemDelta) * float64(currStats.CPUStats.OnlineCpus) * 100.0
+		cpuPercent = (cpuDelta / systemDelta) * float64(currentStats.CPUStats.OnlineCpus) * 100.0
 	}
 
 	return cpuPercent

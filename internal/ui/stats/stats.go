@@ -62,15 +62,15 @@ func (model Stats) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
-	cmds := make([]tea.Cmd, 0)
-	cmds = append(cmds, helpers.PassMsg(msg,
+	commands := make([]tea.Cmd, 0)
+	commands = append(commands, helpers.PassMsg(msg,
 		helpers.NewModel(model.network, func(m tea.Model) { model.network = m }),
 		helpers.NewModel(model.ioStats, func(m tea.Model) { model.ioStats = m }),
 		helpers.NewModel(model.memoryStatsModel, func(m tea.Model) { model.memoryStatsModel = m }),
 		helpers.NewModel(model.cpu, func(m tea.Model) { model.cpu = m }),
 	))
 
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model Stats) View() string {

@@ -36,7 +36,7 @@ func New(config *viper.Viper, theme configuration.Theme, containersService docke
 		return stack, fmt.Errorf("error creating compose file model: %w", err)
 	}
 
-	containers, err := newContainersList(config.GetInt(configuration.ContainersListHeigthName), theme.Sub("containers"), containersService)
+	containers, err := newContainersList(config.GetInt(configuration.ContainersListHeightName), theme.Sub("containers"), containersService)
 	if err != nil {
 		return stack, fmt.Errorf("error creating containers list model: %w", err)
 	}
@@ -70,17 +70,17 @@ func (model Stack) Init() tea.Cmd {
 }
 
 func (model Stack) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
+	commands := make([]tea.Cmd, 0)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyEsc {
 			if model.activeDetailsTab == model.activeTab {
-				cmds = append(cmds, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
+				commands = append(commands, func() tea.Msg { return messages.FocusTabChangedMsg{Tab: messages.Containers} })
 			}
 
 			tabToClose := model.activeDetailsTab
-			cmds = append(cmds, func() tea.Msg { return messages.CloseTabMsg{Tab: tabToClose} })
+			commands = append(commands, func() tea.Msg { return messages.CloseTabMsg{Tab: tabToClose} })
 			model.activeDetailsTab = messages.Compose
 		}
 	case messages.FocusTabChangedMsg:
@@ -93,7 +93,7 @@ func (model Stack) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.height = msg.Height
 
 		var (
-			containersHeight = model.config.GetInt(configuration.ContainersListHeigthName) + 3
+			containersHeight = model.config.GetInt(configuration.ContainersListHeightName) + 3
 			processesHeight  = model.config.GetInt(configuration.ProcessesListHeightName) + 3
 
 			containersSize = messages.SizeChangeMsq{Width: msg.Width, Height: containersHeight}
@@ -118,9 +118,9 @@ func (model Stack) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		helpers.NewModel(model.compose, func(m tea.Model) { model.compose = m }),
 		helpers.NewModel(model.inspect, func(m tea.Model) { model.inspect = m }),
 	)
-	cmds = append(cmds, cmd)
+	commands = append(commands, cmd)
 
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model Stack) View() string {

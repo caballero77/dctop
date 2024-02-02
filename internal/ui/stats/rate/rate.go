@@ -116,9 +116,9 @@ func getRate[T number](data []T) []float64 {
 			continue
 		}
 		value := data[i]
-		curr := value
-		changes[i-1] = prev - curr
-		prev = curr
+		current := value
+		changes[i-1] = prev - current
+		prev = current
 		if changes[i-1] > max {
 			max = changes[i-1]
 		}

@@ -95,7 +95,7 @@ func (model *memory) handleContainersUpdates(msg docker.ContainerMsg) {
 				usage = queues.New[uint]()
 				model.memoryUsages[msg.Inspect.ID] = usage
 			}
-			err := usage.PushWithLimit(model.calculateMemoruUsage(msg.Stats), model.width*2)
+			err := usage.PushWithLimit(model.calculateMemoryUsage(msg.Stats), model.width*2)
 			if err != nil {
 				if err != nil {
 					slog.Error("error pushing element into queue with limit")
@@ -130,6 +130,6 @@ func (model memory) View() string {
 	return model.plotStyles.Render(drawing.RenderPlot(plottingData, 1.6, width, height))
 }
 
-func (memory) calculateMemoruUsage(currStats docker.ContainerStats) uint {
-	return uint(currStats.MemoryStats.Usage - currStats.MemoryStats.Stats.Cache)
+func (memory) calculateMemoryUsage(currentStats docker.ContainerStats) uint {
+	return uint(currentStats.MemoryStats.Usage - currentStats.MemoryStats.Stats.Cache)
 }

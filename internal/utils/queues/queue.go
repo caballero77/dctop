@@ -25,7 +25,7 @@ func (queue *Queue[T]) PushWithLimit(value T, limit int) error {
 	for limit >= 0 && queue.Len() > limit {
 		_, err := queue.Pop()
 		if err != nil {
-			return fmt.Errorf("error poping element from queue: %w", err)
+			return fmt.Errorf("error getting element from queue: %w", err)
 		}
 	}
 	return nil
@@ -42,7 +42,7 @@ func (queue *Queue[T]) Pop() (T, error) {
 	}
 	value, ok := queue.list.Remove(queue.list.Front()).(T)
 	if !ok {
-		return value, errors.New("can't canvert value from queue")
+		return value, errors.New("can't convert value from queue")
 	}
 	return value, nil
 }

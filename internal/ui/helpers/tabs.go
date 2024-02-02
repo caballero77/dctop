@@ -6,7 +6,6 @@ import (
 
 type Tab struct {
 	model tea.Model
-	name  string
 }
 
 type Tabs struct {
@@ -29,18 +28,18 @@ func (model Tabs) Init() tea.Cmd {
 }
 
 func (model Tabs) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
+	commands := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
 	for i, tab := range model.tabs {
 		model.tabs[i].model, cmd = tab.model.Update(msg)
 
 		if cmd != nil {
-			cmds = append(cmds, cmd)
+			commands = append(commands, cmd)
 		}
 	}
 
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model Tabs) View() string {

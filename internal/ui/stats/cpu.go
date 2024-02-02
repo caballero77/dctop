@@ -72,7 +72,7 @@ func (model cpu) Legends() []string {
 			max = value
 		}
 	}
-	scale := model.calculateScalingKoeficient(max)
+	scale := model.calculateScalingCoefficient(max)
 
 	return []string{model.legendStyle.Render(fmt.Sprintf("scale: %d", int(math.Round(scale*100))) + "%")}
 }
@@ -139,12 +139,13 @@ func (model cpu) View() string {
 			max = value
 		}
 	}
-	scale := model.calculateScalingKoeficient(max)
+
+	scale := model.calculateScalingCoefficient(max)
 
 	return model.plotStyles.Render(drawing.RenderPlot(cpuData, scale, width, height))
 }
 
-func (model cpu) calculateScalingKoeficient(maxValue float64) float64 {
+func (model cpu) calculateScalingCoefficient(maxValue float64) float64 {
 	for i := 0; i < len(model.scaling); i++ {
 		if maxValue < float64(model.scaling[i]) {
 			return float64(model.scaling[i]) / 100

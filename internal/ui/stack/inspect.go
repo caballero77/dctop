@@ -51,7 +51,7 @@ func (model inspect) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return model.Upd
 func (inspect) Init() tea.Cmd { return nil }
 
 func (model inspect) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
+	commands := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -61,7 +61,7 @@ func (model inspect) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 
 		model.text, cmd = model.text.Update(messages.SizeChangeMsq{Width: msg.Width, Height: msg.Height - 2})
 		if cmd != nil {
-			cmds = append(cmds, cmd)
+			commands = append(commands, cmd)
 		}
 	case tea.KeyMsg:
 		if model.focus {
@@ -69,19 +69,19 @@ func (model inspect) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 			case tea.KeyUp:
 				model.text, cmd = model.text.Update(messages.ScrollMsg{Change: -1})
 				if cmd != nil {
-					cmds = append(cmds, cmd)
+					commands = append(commands, cmd)
 				}
 			case tea.KeyDown:
 				model.text, cmd = model.text.Update(messages.ScrollMsg{Change: 1})
 				if cmd != nil {
-					cmds = append(cmds, cmd)
+					commands = append(commands, cmd)
 				}
 			}
 		}
 	case docker.ContainerMsg:
 		model, cmd = model.handleContainersUpdates(msg)
 		if cmd != nil {
-			cmds = append(cmds, cmd)
+			commands = append(commands, cmd)
 		}
 	case messages.ContainerSelectedMsg:
 		if model.selectedContainer != msg.Container.InspectData.ID {
@@ -89,17 +89,17 @@ func (model inspect) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 
 			model.text, cmd = model.text.Update(messages.SetTextMgs{Text: model.view(), ResetScroll: false})
 			if cmd != nil {
-				cmds = append(cmds, cmd)
+				commands = append(commands, cmd)
 			}
 		}
 	case messages.FocusTabChangedMsg:
 		model.focus = msg.Tab == messages.Inspect
 	}
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model inspect) handleContainersUpdates(msg docker.ContainerMsg) (inspect, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
+	commands := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -108,7 +108,7 @@ func (model inspect) handleContainersUpdates(msg docker.ContainerMsg) (inspect, 
 		if model.selectedContainer == msg.ID {
 			model.text, cmd = model.text.Update(messages.SetTextMgs{Text: model.view()})
 			if cmd != nil {
-				cmds = append(cmds, cmd)
+				commands = append(commands, cmd)
 			}
 		}
 	case docker.ContainerRemoveMsg:
@@ -116,11 +116,11 @@ func (model inspect) handleContainersUpdates(msg docker.ContainerMsg) (inspect, 
 		if model.selectedContainer == msg.ID {
 			model.text, cmd = model.text.Update(messages.SetTextMgs{Text: model.view()})
 			if cmd != nil {
-				cmds = append(cmds, cmd)
+				commands = append(commands, cmd)
 			}
 		}
 	}
-	return model, tea.Batch(cmds...)
+	return model, tea.Batch(commands...)
 }
 
 func (model inspect) View() string {

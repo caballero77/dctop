@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var braile = [][]string{
+var braille = [][]string{
 	{" ", "⢀", "⢠", "⢰", "⢸"},
 	{"⡀", "⣀", "⣠", "⣰", "⣸"},
 	{"⡄", "⣄", "⣤", "⣴", "⣼"},
@@ -27,10 +27,10 @@ func RenderPlot(data []float64, scale float64, width, height int) string {
 		for i := 0; i < len(lines); i++ {
 			var x, y int
 
-			x, cpuX = convertToBraileRuneIndex(cpuX, k)
-			y, cpuY = convertToBraileRuneIndex(cpuY, k)
+			x, cpuX = convertToBrailleRuneIndex(cpuX, k)
+			y, cpuY = convertToBrailleRuneIndex(cpuY, k)
 
-			lines[i] += braile[x][y]
+			lines[i] += braille[x][y]
 		}
 	}
 
@@ -39,7 +39,7 @@ func RenderPlot(data []float64, scale float64, width, height int) string {
 	return lipgloss.PlaceHorizontal(width, lipgloss.Left, lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
-func convertToBraileRuneIndex(value, scale float64) (index int, asjustedValue float64) {
+func convertToBrailleRuneIndex(value, scale float64) (index int, adjustedValue float64) {
 	if value >= 4*scale {
 		return 4, value - 4*scale
 	}

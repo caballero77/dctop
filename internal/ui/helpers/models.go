@@ -22,13 +22,13 @@ func NewModel(model tea.Model, setter func(tea.Model)) Model {
 }
 
 func PassMsg(msg tea.Msg, models ...Model) tea.Cmd {
-	cmds := make([]tea.Cmd, len(models))
+	commands := make([]tea.Cmd, len(models))
 	for i, value := range models {
 		var newModel tea.Model
-		newModel, cmds[i] = value.model.Update(msg)
+		newModel, commands[i] = value.model.Update(msg)
 		value.setter(newModel)
 	}
-	return tea.Batch(cmds...)
+	return tea.Batch(commands...)
 }
 
 func (base Model) WithMsg(msg tea.Msg) ModelWithMsg {
@@ -39,20 +39,20 @@ func (base Model) WithMsg(msg tea.Msg) ModelWithMsg {
 }
 
 func PassMsgs(sizes ...ModelWithMsg) tea.Cmd {
-	cmds := make([]tea.Cmd, len(sizes))
+	commands := make([]tea.Cmd, len(sizes))
 	for i, value := range sizes {
 		var newModel tea.Model
-		newModel, cmds[i] = value.model.Update(value.msg)
+		newModel, commands[i] = value.model.Update(value.msg)
 		value.setter(newModel)
 
 	}
-	return tea.Batch(cmds...)
+	return tea.Batch(commands...)
 }
 
 func Init(models ...tea.Model) tea.Cmd {
-	cmds := make([]tea.Cmd, len(models))
+	commands := make([]tea.Cmd, len(models))
 	for i, model := range models {
-		cmds[i] = model.Init()
+		commands[i] = model.Init()
 	}
-	return tea.Batch(cmds...)
+	return tea.Batch(commands...)
 }
