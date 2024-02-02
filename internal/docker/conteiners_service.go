@@ -24,8 +24,9 @@ type ContainersService struct {
 	containers map[string]struct{}
 	stack      string
 
-	containerUpdates    chan ContainerMsg
-	unsubscribeChannels map[string]func()
+	containerUpdates          chan ContainerMsg
+	unsubscribeChannels       map[string]func()
+	stopSynchronizationTicker func()
 }
 
 func NewContainersService(ctx context.Context, stack string) (ContainersService, error) {
@@ -55,7 +56,11 @@ func (service ContainersService) Stack() string {
 }
 
 func (service ContainersService) Close() error {
-	slog.Debug("Containers service has stoped")
+	slog.Debug("Containers service has stopped")
+
+	if service.stopSynchronizationTicker != nil {
+		service.stopSynchronizationTicker()
+	}
 
 	for _, unsubscribe := range service.unsubscribeChannels {
 		unsubscribe()
@@ -90,12 +95,12 @@ func (service ContainersService) ContainerUnpause(id string) error {
 }
 
 func (service ContainersService) ContainerStop(id string) error {
-	slog.Debug("Stoping container",
+	slog.Debug("Stopping container",
 		"Id", id)
 
 	err := service.cli.ContainerStop(service.ctx, id, container.StopOptions{})
 	if err != nil {
-		return fmt.Errorf("error while stoping container: %w", err)
+		return fmt.Errorf("error while stopping container: %w", err)
 	}
 	return nil
 }
@@ -181,23 +186,23 @@ func (service *ContainersService) GetContainerUpdates() (chan ContainerMsg, erro
 
 	service.containerUpdates = make(chan ContainerMsg)
 
-	for id := range service.containers {
-		err := service.startListeningForUpdates(id)
+	slog.Info("Start synchronization process of containers")
+
+	sync := func() {
+		err := service.syncContainers()
 		if err != nil {
-			return nil, fmt.Errorf("error subscribing on containers updates: %w", err)
+			slog.Error("error in process of containers synchronization",
+				"error", err)
 		}
 	}
 
-	slog.Info("Start synchronization process of containers")
+	ticker := time.NewTicker(5 * time.Second)
+	service.stopSynchronizationTicker = ticker.Stop
+
 	go func() {
-		ticker := time.NewTicker(2 * time.Second)
+		sync()
 		for range ticker.C {
-			err := service.syncContainers()
-			if err != nil {
-				slog.Error("error in process of containers synchronization",
-					"error", err)
-				continue
-			}
+			sync()
 		}
 	}()
 
@@ -205,7 +210,7 @@ func (service *ContainersService) GetContainerUpdates() (chan ContainerMsg, erro
 	return service.containerUpdates, nil
 }
 
-func (service ContainersService) mapTopProceses(top container.ContainerTopOKBody) []Process {
+func (service ContainersService) mapTopProcess(top container.ContainerTopOKBody) []Process {
 	titles := make(map[string]int, len(top.Titles))
 	for i := 0; i < len(top.Titles); i++ {
 		titles[top.Titles[i]] = i
@@ -235,7 +240,7 @@ func (service *ContainersService) startListeningForUpdates(id string) error {
 	service.unsubscribeChannels[id] = cancel
 	service.containers[id] = struct{}{}
 
-	slog.Debug("Start listenning container statsisticts",
+	slog.Debug("Start listening container statistics",
 		"Id", id)
 
 	statisticsResponse, err := service.cli.ContainerStats(ctx, id, true)
@@ -250,7 +255,7 @@ func (service *ContainersService) startListeningForUpdates(id string) error {
 		for {
 			select {
 			case <-ctx.Done():
-				slog.Info("Stop listeting container statistics due to end of provided stream",
+				slog.Info("Stop listening container statistics due to end of provided stream",
 					"Id", id)
 
 				statisticsResponse.Body.Close()
@@ -286,7 +291,7 @@ func (service *ContainersService) startListeningForUpdates(id string) error {
 							"error", err)
 					}
 
-					processes = service.mapTopProceses(top)
+					processes = service.mapTopProcess(top)
 				}
 
 				service.containerUpdates <- ContainerUpdateMsg{
