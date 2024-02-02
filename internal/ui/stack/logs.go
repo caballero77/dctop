@@ -53,9 +53,13 @@ func newLogs(containersService docker.ContainersService, theme configuration.The
 	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
 	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
 
+	scrollStyle := lipgloss.NewStyle().
+		Foreground(theme.GetColor("scroll.foreground")).
+		Background(theme.GetColor("scroll.background"))
+
 	model := logs{
-		stdoutText:          helpers.NewTextBox("", style),
-		stderrText:          helpers.NewTextBox("", style),
+		stdoutText:          helpers.NewTextBox("", style, scrollStyle),
+		stderrText:          helpers.NewTextBox("", style, scrollStyle),
 		selectedLogType:     Stdout,
 		labelStyle:          labelStyle,
 		labeShortcutStyle:   labeShortcutStyle,

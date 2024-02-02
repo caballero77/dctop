@@ -41,10 +41,14 @@ func newCompose(theme configuration.Theme, containersService docker.ComposeServi
 	legendStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain"))
 	legendShortcutStyle := lipgloss.NewStyle().Foreground(theme.GetColor("legend.shortcut"))
 
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#81A1C1"))
+	textStyle := lipgloss.NewStyle().Foreground(theme.GetColor("body.text"))
+
+	scrollStyle := lipgloss.NewStyle().
+		Foreground(theme.GetColor("scroll.foreground")).
+		Background(theme.GetColor("scroll.background"))
 
 	model := compose{
-		text:              helpers.NewTextBox(composeFile, style),
+		text:              helpers.NewTextBox(composeFile, textStyle, scrollStyle),
 		containersService: containersService,
 		composeFile:       strings.Split(composeFile, "\n"),
 		label:             labelStyle.Render("Compose ") + labeShortcutStyle.Render("f") + labelStyle.Render("ile"),

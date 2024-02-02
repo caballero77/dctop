@@ -31,8 +31,15 @@ type inspect struct {
 func newInspect(theme configuration.Theme) tea.Model {
 	label := lipgloss.NewStyle().Foreground(theme.GetColor("title.shortcut")).Render("I") +
 		lipgloss.NewStyle().Foreground(theme.GetColor("title.plain")).Render("nspect")
+
+	textStyle := lipgloss.NewStyle().Foreground(theme.GetColor("body.text"))
+
+	scrollStyle := lipgloss.NewStyle().
+		Foreground(theme.GetColor("scroll.foreground")).
+		Background(theme.GetColor("scroll.background"))
+
 	model := inspect{
-		text:     helpers.NewTextBox("", lipgloss.NewStyle().Foreground(theme.GetColor("body.text"))),
+		text:     helpers.NewTextBox("", textStyle, scrollStyle),
 		inspects: make(map[string]types.ContainerJSON),
 		label:    label,
 	}

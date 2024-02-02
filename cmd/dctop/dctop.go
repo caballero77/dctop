@@ -66,7 +66,7 @@ func main() {
 
 	output := termenv.NewOutput(os.Stdout)
 	backgroundColor := termenv.BackgroundColor()
-	output.SetBackgroundColor(termenv.RGBColor("#2E3440"))
+	output.SetBackgroundColor(termenv.RGBColor(theme.GetString("background")))
 
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithOutput(output))
 	if _, err := p.Run(); err != nil {

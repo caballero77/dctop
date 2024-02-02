@@ -47,6 +47,8 @@ processes:
       foreground: "#D8DEE9"
 
 file:
+  body:
+    text: "#81A1C1"
   title:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"
@@ -56,6 +58,9 @@ file:
   legend:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"
+  scroll:
+    background: "#2E3440"
+    foreground: "#D8DEE9"
 
 logs:
   body:
@@ -69,6 +74,9 @@ logs:
   legend:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"
+  scroll:
+    background: "#2E3440"
+    foreground: "#D8DEE9"
 
 inspect:
   body:
@@ -83,6 +91,9 @@ inspect:
   legend:
     plain: "#8FBCBB"
     shortcut: "#5E81AC"
+  scroll:
+    background: "#2E3440"
+    foreground: "#D8DEE9"
 
 cpu:
   title:
