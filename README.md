@@ -8,7 +8,7 @@ Docker Compose resource monitor that outputs containers cpu, memory, network, io
 
 ## Features
 
-- Showind detailed stats of selected container
+- Showing detailed stats of selected container
 - Showing processed and logs of selected container 
 - Allows to call up and down commands on selected compose file
 - Ability to stop/start and pause/unpause created containers
@@ -19,7 +19,7 @@ Docker Compose resource monitor that outputs containers cpu, memory, network, io
 
 Now dctop only supports [nord](https://www.nordtheme.com/), but I'm going to add a few new themes.
 
-All themes after instalation is going to placed in `/usr/local/share/dctop/themes` folder.
+All themes after installation is going to placed in `/usr/local/share/dctop/themes` folder.
 
 You can them in [themes](https://github.com/caballero77/dctop/tree/main/themes) folder. Also feel free to contribute with new themes or create an issue requesting new theme.
 ## Screenshots

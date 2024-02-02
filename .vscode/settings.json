@@ -1,8 +1,31 @@
 {
     "cSpell.words": [
+        "Blkio",
         "bubbletea",
         "charmbracelet",
+        "cpus",
         "dctop",
-        "lipgloss"
+        "failcnt",
+        "kernelmode",
+        "lipgloss",
+        "nord",
+        "percpu",
+        "pgfault",
+        "pgmajfault",
+        "pgpgin",
+        "pgpgout",
+        "Pids",
+        "PPID",
+        "Precpu",
+        "unevictable",
+        "usermode",
+        "writeback"
+    ],
+    "cSpell.enableFiletypes": [
+        "go.mod",
+        "go.sum",
+        "go.work",
+        "gotmpl",
+        "ignore"
     ]
 }

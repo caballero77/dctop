@@ -182,7 +182,7 @@ func (service *ContainersService) GetContainerUpdates() (chan ContainerMsg, erro
 	service.containerUpdates = make(chan ContainerMsg)
 
 	for id := range service.containers {
-		err := service.startLiseningForUpdates(id)
+		err := service.startListeningForUpdates(id)
 		if err != nil {
 			return nil, fmt.Errorf("error subscribing on containers updates: %w", err)
 		}
@@ -226,7 +226,7 @@ func (service ContainersService) mapTopProceses(top container.ContainerTopOKBody
 	return processes
 }
 
-func (service *ContainersService) startLiseningForUpdates(id string) error {
+func (service *ContainersService) startListeningForUpdates(id string) error {
 	slog.Info("Subscribing on container updates",
 		"Id", id)
 
@@ -319,7 +319,7 @@ func (service ContainersService) syncContainers() error {
 	for _, container := range containers {
 		existingContainers[container.ID] = struct{}{}
 		if _, ok := service.containers[container.ID]; !ok {
-			err := service.startLiseningForUpdates(container.ID)
+			err := service.startListeningForUpdates(container.ID)
 			if err != nil {
 				return err
 			}
