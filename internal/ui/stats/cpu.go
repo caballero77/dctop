@@ -5,10 +5,8 @@ import (
 	"dctop/internal/docker"
 	"dctop/internal/ui/helpers"
 	"dctop/internal/ui/messages"
-	"dctop/internal/ui/stats/drawing"
-	"dctop/internal/utils/queues"
+	"dctop/internal/ui/stats/drawing/plotting"
 	"fmt"
-	"log/slog"
 	"math"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,14 +14,18 @@ import (
 )
 
 type cpu struct {
+	cpuPlots map[string]plotting.Plot[float64]
+
+	cpuUsages    map[string]float64
+	maxCPUUsages map[string]float64
+
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 	scaling     []int
 
 	containerID        string
-	cpuUsages          map[string]*queues.Queue[float64]
-	prevContainerStats map[string]docker.ContainerStats
+	prevContainerStats map[string]docker.CPUStats
 
 	width  int
 	height int
@@ -31,12 +33,15 @@ type cpu struct {
 
 func newCPU(theme configuration.Theme) tea.Model {
 	model := cpu{
+		cpuPlots:     make(map[string]plotting.Plot[float64]),
+		cpuUsages:    make(map[string]float64),
+		maxCPUUsages: make(map[string]float64),
+
 		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
 
-		cpuUsages:          make(map[string]*queues.Queue[float64]),
-		prevContainerStats: make(map[string]docker.ContainerStats),
+		prevContainerStats: make(map[string]docker.CPUStats),
 		scaling:            []int{15, 25, 35, 45, 55, 65, 75, 100},
 	}
 
@@ -47,32 +52,20 @@ func (cpu) Focus() bool { return false }
 
 func (model cpu) Labels() []string {
 	cpuUsage, ok := model.cpuUsages[model.containerID]
-	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
+	if !ok {
 		return []string{model.labelStyle.Render("cpu")}
 	}
 
-	currentUsage, err := cpuUsage.Head()
-	if err != nil {
-		return []string{model.labelStyle.Render("cpu")}
-	}
-
-	return []string{model.labelStyle.Render(fmt.Sprintf("cpu: %.2f", currentUsage) + "%")}
+	return []string{model.labelStyle.Render(fmt.Sprintf("cpu: %.2f", cpuUsage) + "%")}
 }
 
 func (model cpu) Legends() []string {
-	cpuUsage, ok := model.cpuUsages[model.containerID]
-	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
+	maxCPUUsage, ok := model.maxCPUUsages[model.containerID]
+	if !ok {
 		return []string{}
 	}
 
-	cpuData := cpuUsage.ToArray()
-	max := 0.0
-	for _, value := range cpuData {
-		if max < value {
-			max = value
-		}
-	}
-	scale := model.calculateScalingCoefficient(max)
+	scale := model.calculateScalingCoefficient(maxCPUUsage)
 
 	return []string{model.legendStyle.Render(fmt.Sprintf("scale: %d", int(math.Round(scale*100))) + "%")}
 }
@@ -92,6 +85,12 @@ func (model cpu) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	case messages.SizeChangeMsq:
 		model.width = msg.Width
 		model.height = msg.Height
+
+		for id, cpuPlot := range model.cpuPlots {
+			cpuPlot.SetSize(msg.Width-2, msg.Height-2)
+			model.cpuPlots[id] = cpuPlot
+		}
+
 	}
 	return model, nil
 }
@@ -101,48 +100,42 @@ func (model *cpu) handleContainersUpdates(msg docker.ContainerMsg) {
 	case docker.ContainerUpdateMsg:
 		switch msg.Inspect.State.Status {
 		case "removing", "exited", "dead", "":
-			delete(model.prevContainerStats, msg.Inspect.ID)
+			delete(model.cpuPlots, msg.ID)
 			delete(model.cpuUsages, msg.Inspect.ID)
 		case "restarting", "paused", "running", "created":
+			cpuPlot, ok := model.cpuPlots[msg.Inspect.ID]
+			if !ok {
+				cpuPlot = model.createNewPlot()
+			}
+
 			prevStats, ok := model.prevContainerStats[msg.Inspect.ID]
 			if ok {
-				usage, ok := model.cpuUsages[msg.Inspect.ID]
-				if !ok {
-					usage = queues.New[float64]()
-					model.cpuUsages[msg.Inspect.ID] = usage
+				usage := model.calculateCPUUsage(msg.Stats.CPUStats, prevStats)
+				model.cpuUsages[msg.Inspect.ID] = usage
+				if model.maxCPUUsages[msg.Inspect.ID] < usage {
+					model.maxCPUUsages[msg.Inspect.ID] = usage
+					cpuPlot.SetScale(model.calculateScalingCoefficient(usage))
 				}
-				err := usage.PushWithLimit(model.calculateCPUUsage(msg.Stats, prevStats), model.width*2)
-				if err != nil {
-					slog.Error("error pushing element into queue with limit")
-				}
+				cpuPlot.Push(usage)
 			}
-			model.prevContainerStats[msg.Inspect.ID] = msg.Stats
+
+			model.prevContainerStats[msg.Inspect.ID] = msg.Stats.CPUStats
+			model.cpuPlots[msg.Inspect.ID] = cpuPlot
 		}
 	case docker.ContainerRemoveMsg:
-		delete(model.cpuUsages, msg.ID)
+		delete(model.cpuPlots, msg.ID)
 		delete(model.prevContainerStats, msg.ID)
 	}
 }
 
 func (model cpu) View() string {
-	cpuUsage, ok := model.cpuUsages[model.containerID]
-	width := model.width - 2
-	height := model.height - 2
-	if !ok || cpuUsage == nil || cpuUsage.Len() == 0 {
-		return lipgloss.PlaceVertical(height, lipgloss.Center, lipgloss.PlaceHorizontal(width, lipgloss.Center, "no data"))
+	cpuPlot, ok := model.cpuPlots[model.containerID]
+	if !ok {
+		cpuPlot = model.createNewPlot()
+		model.cpuPlots[model.containerID] = cpuPlot
 	}
 
-	cpuData := cpuUsage.ToArray()
-	max := 0.0
-	for _, value := range cpuData {
-		if max < value {
-			max = value
-		}
-	}
-
-	scale := model.calculateScalingCoefficient(max)
-
-	return model.plotStyles.Render(drawing.RenderPlot(cpuData, scale, width, height))
+	return model.plotStyles.Render(cpuPlot.View())
 }
 
 func (model cpu) calculateScalingCoefficient(maxValue float64) float64 {
@@ -154,16 +147,22 @@ func (model cpu) calculateScalingCoefficient(maxValue float64) float64 {
 	return 1
 }
 
-func (cpu) calculateCPUUsage(currStats, prevStats docker.ContainerStats) float64 {
+func (cpu) calculateCPUUsage(currentStats, prevStats docker.CPUStats) float64 {
 	var (
 		cpuPercent  = 0.0
-		cpuDelta    = float64(currStats.CPUStats.CPUUsage.TotalUsage) - float64(prevStats.CPUStats.CPUUsage.TotalUsage)
-		systemDelta = float64(currStats.CPUStats.SystemCPUUsage) - float64(prevStats.CPUStats.SystemCPUUsage)
+		cpuDelta    = float64(currentStats.CPUUsage.TotalUsage) - float64(prevStats.CPUUsage.TotalUsage)
+		systemDelta = float64(currentStats.SystemCPUUsage) - float64(prevStats.SystemCPUUsage)
 	)
 
 	if systemDelta != 0.0 && cpuDelta != 0.0 {
-		cpuPercent = (cpuDelta / systemDelta) * float64(currStats.CPUStats.OnlineCpus) * 100.0
+		cpuPercent = (cpuDelta / systemDelta) * float64(currentStats.OnlineCpus) * 100.0
 	}
 
 	return cpuPercent
+}
+
+func (model cpu) createNewPlot() plotting.Plot[float64] {
+	plot := plotting.New[float64]()
+	plot.SetSize(model.width-2, model.height-2)
+	return plot
 }
