@@ -4,10 +4,8 @@ import (
 	"dctop/internal/configuration"
 	"dctop/internal/ui/helpers"
 	"dctop/internal/ui/messages"
-	"dctop/internal/ui/stats/drawing"
-	"dctop/internal/utils/queues"
+	"dctop/internal/ui/stats/drawing/plotting"
 	"fmt"
-	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,7 +18,7 @@ type number interface {
 }
 
 type Model[T number] struct {
-	data *queues.Queue[T]
+	plot plotting.Plot[float64]
 
 	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
@@ -34,15 +32,17 @@ type Model[T number] struct {
 
 	width  int
 	height int
+
+	ready bool
 }
 
 func New[T number](name string, theme configuration.Theme) tea.Model {
 	model := Model[T]{
-		data:        queues.New[T](),
 		name:        name,
 		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
+		plot:        plotting.New[float64](func(_ float64) float64 { return 1 }),
 	}
 
 	return helpers.NewBox(model, theme.Sub("border"))
@@ -72,6 +72,8 @@ func (model Model[T]) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 	case messages.SizeChangeMsq:
 		model.width = msg.Width - 2
 		model.height = msg.Height - 2
+
+		model.plot.SetSize(msg.Width-2, msg.Height-2)
 	case PushMsg[T]:
 		model.push(msg.Value)
 	}
@@ -79,15 +81,7 @@ func (model Model[T]) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 }
 
 func (model Model[T]) View() string {
-	if model.data.Len() <= 1 {
-		return lipgloss.Place(model.width, model.height, lipgloss.Center, lipgloss.Center, "no data")
-	}
-
-	data := getRate(model.data.ToArray())
-
-	plot := drawing.RenderPlot(data, 1, model.width, model.height)
-
-	return model.plotStyles.Render(plot)
+	return model.plotStyles.Render(model.plot.View())
 }
 
 func (model *Model[T]) push(value T) {
@@ -97,41 +91,8 @@ func (model *Model[T]) push(value T) {
 	}
 	model.total = value
 
-	err := model.data.PushWithLimit(value, model.width*2)
-	if err != nil {
-		slog.Error("Error pushing value in queue with limit",
-			"component", model.name,
-			"limit", model.width*2,
-			"error", err)
+	if model.ready {
+		model.plot.Push(100 * float64(model.currentRate) / float64(model.max))
 	}
-}
-
-func getRate[T number](data []T) []float64 {
-	var max T
-	changes := make([]T, len(data)-1)
-	var prev T
-	for i := 0; i < len(data); i++ {
-		if i == 0 {
-			prev = data[i]
-			continue
-		}
-		value := data[i]
-		current := value
-		changes[i-1] = prev - current
-		prev = current
-		if changes[i-1] > max {
-			max = changes[i-1]
-		}
-	}
-
-	rates := make([]float64, len(changes))
-	if max == 0 {
-		return rates
-	}
-
-	for i := 0; i < len(changes); i++ {
-		rates[i] = (float64(changes[i]) / float64(max)) * 100
-	}
-
-	return rates
+	model.ready = true
 }
