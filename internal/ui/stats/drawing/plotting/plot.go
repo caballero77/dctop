@@ -22,16 +22,18 @@ var braille = [5][5]string{
 }
 
 type Plot[T constraints.Float] struct {
-	data  *queues.Queue[T]
-	scale T
+	data     *queues.Queue[T]
+	scale    func(T) T
+	maxValue T
 
 	width  int
 	height int
 }
 
-func New[T constraints.Float]() Plot[T] {
+func New[T constraints.Float](scale func(T) T) Plot[T] {
 	return Plot[T]{
-		data: queues.New[T](),
+		data:  queues.New[T](),
+		scale: scale,
 	}
 }
 
@@ -43,8 +45,6 @@ func (model Plot[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.SetSize(msg.Width, msg.Height)
 	case PushMsg[T]:
 		model.Push(msg.Value)
-	case SetScale[T]:
-		model.SetScale(msg.Scale)
 	}
 
 	return model, nil
@@ -57,12 +57,14 @@ func (model Plot[T]) View() string {
 
 	data := model.data.ToArray()
 	plot := make([]string, model.height)
-	k := model.scale * 100 / T(model.height*4)
+
+	scale := model.scale(model.maxValue)
+	k := scale * 100 / T(model.height*4)
 
 	for i := 0; i < len(data) && i/2 < model.width; i += 2 {
-		cpuX, cpuY := data[i], T(0.0)
+		cpuX, cpuY := 100*data[i]/model.maxValue, T(0.0)
 		if i+1 < len(data) {
-			cpuY = data[i+1]
+			cpuY = 100 * data[i+1] / model.maxValue
 		}
 
 		for i := 0; i < len(plot); i++ {
@@ -92,10 +94,12 @@ func (model *Plot[T]) Push(value T) {
 			"limit", model.width*2,
 			"error", err)
 	}
-}
 
-func (model *Plot[T]) SetScale(value T) {
-	model.scale = value
+	var maxValue T
+	for _, item := range model.data.ToArray() {
+		maxValue = max(maxValue, item)
+	}
+	model.maxValue = maxValue
 }
 
 func convertToBrailleRuneIndex[T constraints.Float](value, scale T) (index int, adjustedValue T) {

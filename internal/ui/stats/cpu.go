@@ -114,7 +114,6 @@ func (model *cpu) handleContainersUpdates(msg docker.ContainerMsg) {
 				model.cpuUsages[msg.Inspect.ID] = usage
 				if model.maxCPUUsages[msg.Inspect.ID] < usage {
 					model.maxCPUUsages[msg.Inspect.ID] = usage
-					cpuPlot.SetScale(model.calculateScalingCoefficient(usage))
 				}
 				cpuPlot.Push(usage)
 			}
@@ -162,7 +161,7 @@ func (cpu) calculateCPUUsage(currentStats, prevStats docker.CPUStats) float64 {
 }
 
 func (model cpu) createNewPlot() plotting.Plot[float64] {
-	plot := plotting.New[float64]()
+	plot := plotting.New[float64](model.calculateScalingCoefficient)
 	plot.SetSize(model.width-2, model.height-2)
 	return plot
 }

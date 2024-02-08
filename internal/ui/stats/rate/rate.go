@@ -42,10 +42,8 @@ func New[T number](name string, theme configuration.Theme) tea.Model {
 		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		plot:        plotting.New[float64](),
+		plot:        plotting.New[float64](func(_ float64) float64 { return 1 }),
 	}
-
-	model.plot.SetScale(1)
 
 	return helpers.NewBox(model, theme.Sub("border"))
 }

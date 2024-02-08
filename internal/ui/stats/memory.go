@@ -125,8 +125,7 @@ func (memory) calculateMemoryUsage(currentStats docker.ContainerStats) uint {
 }
 
 func (model memory) createNewPlot() plotting.Plot[float64] {
-	memoryPlot := plotting.New[float64]()
-	memoryPlot.SetScale(1.6)
+	memoryPlot := plotting.New[float64](func(_ float64) float64 { return 1.6 })
 	memoryPlot.SetSize(model.width-2, model.height-2)
 	return memoryPlot
 }
