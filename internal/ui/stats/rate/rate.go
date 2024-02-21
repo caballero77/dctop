@@ -21,7 +21,6 @@ type number interface {
 type Model[T number] struct {
 	plot plotting.Plot[float64]
 
-	plotStyles  lipgloss.Style
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 
@@ -40,10 +39,9 @@ type Model[T number] struct {
 func New[T number](name string, theme configuration.Theme) tea.Model {
 	model := Model[T]{
 		name:        name,
-		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		plot:        plotting.New[float64](func(_ float64) float64 { return 1 }),
+		plot:        plotting.New[float64](func(_ float64) float64 { return 1 }, plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")}),
 	}
 
 	return helpers.NewBox(model, theme.Sub("border"))
@@ -82,7 +80,7 @@ func (model Model[T]) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 }
 
 func (model Model[T]) View() string {
-	return model.plotStyles.Render(model.plot.View())
+	return model.plot.View()
 }
 
 func (model *Model[T]) push(value T) {

@@ -105,7 +105,9 @@ cpu:
   legend:
     plain: "#434C5E"
     shortcut: "#5E81AC"
-  plot: "#81A1C1"
+  plot:
+    from: "#81A1C1"
+    to: "#ECEFF4"
 
 memory:
   title:
@@ -117,7 +119,9 @@ memory:
   legend:
     plain: "#434C5E"
     shortcut: "#5E81AC"
-  plot: "#81A1C1"
+  plot:
+    from: "#81A1C1"
+    to: "#ECEFF4"
 
 network:
   title:
@@ -129,7 +133,9 @@ network:
   legend:
     plain: "#434C5E"
     shortcut: "#5E81AC"
-  plot: "#81A1C1"
+  plot:
+    from: "#81A1C1"
+    to: "#ECEFF4"
 
 io:
   title:
@@ -141,4 +147,6 @@ io:
   legend:
     plain: "#434C5E"
     shortcut: "#5E81AC"
-  plot: "#81A1C1"
+  plot:
+    from: "#81A1C1"
+    to: "#ECEFF4"

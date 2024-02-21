@@ -15,7 +15,7 @@ import (
 )
 
 type memory struct {
-	plotStyles  lipgloss.Style
+	plotColor   plotting.ColorGradient
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 
@@ -33,7 +33,7 @@ type memory struct {
 
 func newMemory(theme configuration.Theme) tea.Model {
 	model := memory{
-		plotStyles:     lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
+		plotColor:      plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
 		labelStyle:     lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle:    lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
 		memoryPlots:    make(map[string]plotting.Plot[float64]),
@@ -118,7 +118,7 @@ func (model memory) View() string {
 		model.memoryPlots[model.containerID] = memoryPlot
 	}
 
-	return model.plotStyles.Render(memoryPlot.View())
+	return memoryPlot.View()
 }
 
 func (memory) calculateMemoryUsage(currentStats docker.ContainerStats) uint {
@@ -126,7 +126,7 @@ func (memory) calculateMemoryUsage(currentStats docker.ContainerStats) uint {
 }
 
 func (model memory) createNewPlot() plotting.Plot[float64] {
-	memoryPlot := plotting.New[float64](func(_ float64) float64 { return 1.6 })
+	memoryPlot := plotting.New[float64](func(_ float64) float64 { return 1.6 }, model.plotColor)
 	memoryPlot.SetSize(model.width-2, model.height-2)
 	return memoryPlot
 }

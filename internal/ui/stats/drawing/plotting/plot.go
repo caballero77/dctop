@@ -2,8 +2,8 @@ package plotting
 
 import (
 	"fmt"
+	"image/color"
 	"log/slog"
-	"math"
 	"slices"
 
 	"github.com/caballero77/dctop/internal/ui/messages"
@@ -22,19 +22,27 @@ var braille = [5][5]string{
 	{"⡇", "⣇", "⣧", "⣷", "⣿"},
 }
 
+type ColorGradient struct {
+	From lipgloss.Color
+	To   lipgloss.Color
+}
+
 type Plot[T constraints.Float] struct {
 	data     *queues.Queue[T]
 	scale    func(T) T
 	maxValue T
 
+	color ColorGradient
+
 	width  int
 	height int
 }
 
-func New[T constraints.Float](scale func(T) T) Plot[T] {
+func New[T constraints.Float](scale func(T) T, gradient ColorGradient) Plot[T] {
 	return Plot[T]{
 		data:  queues.New[T](),
 		scale: scale,
+		color: gradient,
 	}
 }
 
@@ -76,6 +84,12 @@ func (model Plot[T]) View() string {
 
 			plot[i] += braille[x][y]
 		}
+	}
+
+	gradient := generateColorGradient(model.color.From, model.color.To, len(plot))
+
+	for i, line := range plot {
+		plot[i] = lipgloss.NewStyle().Foreground(gradient[i]).Render(line)
 	}
 
 	slices.Reverse(plot)
@@ -122,42 +136,34 @@ func convertToBrailleRuneIndex[T constraints.Float](value, scale T) (index int, 
 	return index, 0
 }
 
-func drawPlotWithGradient(lines []string, start, end lipgloss.Color) []string {
-	gradient := generateColorGradient(start, end, len(lines))
-
-	for i, line := range lines {
-		lines[i] = lipgloss.NewStyle().Foreground(gradient[i]).Render(line)
-	}
-
-	return lines
-}
-
 func generateColorGradient(start, end lipgloss.Color, numSteps int) []lipgloss.Color {
-	startRGB := hexToRGB(start)
-	endRGB := hexToRGB(end)
+	color1 := lipglossToRGBA(start)
+	color2 := lipglossToRGBA(end)
 
-	stepSize := [3]float64{
-		float64(endRGB[0]-startRGB[0]) / float64(numSteps-1),
-		float64(endRGB[1]-startRGB[1]) / float64(numSteps-1),
-		float64(endRGB[2]-startRGB[2]) / float64(numSteps-1),
-	}
+	gradient := make([]lipgloss.Color, numSteps)
+	rStep := float64(color2.R-color1.R) / float64(numSteps-1)
+	gStep := float64(color2.G-color1.G) / float64(numSteps-1)
+	bStep := float64(color2.B-color1.B) / float64(numSteps-1)
+	aStep := float64(color2.A-color1.A) / float64(numSteps-1)
 
-	var gradient []lipgloss.Color
-	for step := 0; step < numSteps; step++ {
-		rgb := [3]uint32{
-			startRGB[0] + uint32(math.Round(float64(step)*stepSize[0])),
-			startRGB[1] + uint32(math.Round(float64(step)*stepSize[1])),
-			startRGB[2] + uint32(math.Round(float64(step)*stepSize[2])),
-		}
-
-		colorHex := fmt.Sprintf("#%02x%02x%02x", rgb[0], rgb[1], rgb[2])
-		gradient = append(gradient, lipgloss.Color(colorHex))
+	for i := 0; i < numSteps; i++ {
+		r := uint8(float64(color1.R) + float64(i)*rStep)
+		g := uint8(float64(color1.G) + float64(i)*gStep)
+		b := uint8(float64(color1.B) + float64(i)*bStep)
+		a := uint8(float64(color1.A) + float64(i)*aStep)
+		gradient[i] = lipgloss.Color(fmt.Sprintf("#%02x%02x%02x%02x", r, g, b, a))
 	}
 
 	return gradient
 }
 
-func hexToRGB(hexColor lipgloss.Color) [3]uint32 {
-	r, g, b, _ := hexColor.RGBA()
-	return [3]uint32{r, g, b}
+func lipglossToRGBA(lipglossColor lipgloss.Color) color.RGBA {
+	r, g, b, a := lipglossColor.RGBA()
+
+	return color.RGBA{
+		R: uint8(r),
+		G: uint8(g),
+		B: uint8(b),
+		A: uint8(a),
+	}
 }

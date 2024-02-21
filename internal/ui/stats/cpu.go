@@ -20,7 +20,7 @@ type cpu struct {
 	cpuUsages    map[string]float64
 	maxCPUUsages map[string]float64
 
-	plotStyles  lipgloss.Style
+	plotColor   plotting.ColorGradient
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 	scaling     []int
@@ -38,7 +38,7 @@ func newCPU(theme configuration.Theme) tea.Model {
 		cpuUsages:    make(map[string]float64),
 		maxCPUUsages: make(map[string]float64),
 
-		plotStyles:  lipgloss.NewStyle().Foreground(theme.GetColor("plot")),
+		plotColor:   plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
 
@@ -135,7 +135,7 @@ func (model cpu) View() string {
 		model.cpuPlots[model.containerID] = cpuPlot
 	}
 
-	return model.plotStyles.Render(cpuPlot.View())
+	return cpuPlot.View()
 }
 
 func (model cpu) calculateScalingCoefficient(maxValue float64) float64 {
@@ -162,7 +162,7 @@ func (cpu) calculateCPUUsage(currentStats, prevStats docker.CPUStats) float64 {
 }
 
 func (model cpu) createNewPlot() plotting.Plot[float64] {
-	plot := plotting.New[float64](model.calculateScalingCoefficient)
+	plot := plotting.New[float64](model.calculateScalingCoefficient, model.plotColor)
 	plot.SetSize(model.width-2, model.height-2)
 	return plot
 }
