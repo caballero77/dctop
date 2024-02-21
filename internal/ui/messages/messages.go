@@ -1,6 +1,6 @@
 package messages
 
-import "dctop/internal/docker"
+import "github.com/caballero77/dctop/internal/docker"
 
 type SizeChangeMsq struct {
 	Width  int

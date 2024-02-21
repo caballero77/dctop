@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	"dctop/internal/configuration"
+	"github.com/caballero77/dctop/internal/configuration"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"

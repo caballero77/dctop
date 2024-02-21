@@ -1,8 +1,9 @@
 package helpers
 
 import (
-	"dctop/internal/configuration"
 	"strings"
+
+	"github.com/caballero77/dctop/internal/configuration"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

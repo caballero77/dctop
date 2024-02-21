@@ -1,9 +1,9 @@
 package stats
 
 import (
-	"dctop/internal/configuration"
-	"dctop/internal/ui/helpers"
-	"dctop/internal/ui/messages"
+	"github.com/caballero77/dctop/internal/configuration"
+	"github.com/caballero77/dctop/internal/ui/helpers"
+	"github.com/caballero77/dctop/internal/ui/messages"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

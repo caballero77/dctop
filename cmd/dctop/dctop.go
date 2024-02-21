@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"dctop/internal/configuration"
-	"dctop/internal/docker"
-	"dctop/internal/ui"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
+
+	"github.com/caballero77/dctop/internal/configuration"
+	"github.com/caballero77/dctop/internal/docker"
+	"github.com/caballero77/dctop/internal/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/termenv"

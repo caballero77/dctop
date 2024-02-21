@@ -1,13 +1,14 @@
 package stats
 
 import (
-	"dctop/internal/configuration"
-	"dctop/internal/docker"
-	"dctop/internal/ui/helpers"
-	"dctop/internal/ui/messages"
-	"dctop/internal/ui/stats/drawing/plotting"
 	"fmt"
 	"math"
+
+	"github.com/caballero77/dctop/internal/configuration"
+	"github.com/caballero77/dctop/internal/docker"
+	"github.com/caballero77/dctop/internal/ui/helpers"
+	"github.com/caballero77/dctop/internal/ui/messages"
+	"github.com/caballero77/dctop/internal/ui/stats/drawing/plotting"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

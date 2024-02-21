@@ -1,16 +1,17 @@
 package stack
 
 import (
-	"dctop/internal/configuration"
-	"dctop/internal/docker"
-	"dctop/internal/ui/helpers"
-	"dctop/internal/ui/messages"
-	"dctop/internal/utils"
 	"fmt"
 	"log/slog"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/caballero77/dctop/internal/configuration"
+	"github.com/caballero77/dctop/internal/docker"
+	"github.com/caballero77/dctop/internal/ui/helpers"
+	"github.com/caballero77/dctop/internal/ui/messages"
+	"github.com/caballero77/dctop/internal/utils"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

@@ -2,13 +2,14 @@ package stack
 
 import (
 	"bytes"
-	"dctop/internal/configuration"
-	"dctop/internal/docker"
-	"dctop/internal/ui/helpers"
-	"dctop/internal/ui/messages"
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/caballero77/dctop/internal/configuration"
+	"github.com/caballero77/dctop/internal/docker"
+	"github.com/caballero77/dctop/internal/ui/helpers"
+	"github.com/caballero77/dctop/internal/ui/messages"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

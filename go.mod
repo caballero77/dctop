@@ -1,4 +1,4 @@
-module dctop
+module github.com/caballero77/dctop
 
 go 1.21.0
 

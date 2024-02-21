@@ -1,12 +1,13 @@
 package plotting
 
 import (
-	"dctop/internal/ui/messages"
-	"dctop/internal/utils/queues"
 	"fmt"
 	"log/slog"
 	"math"
 	"slices"
+
+	"github.com/caballero77/dctop/internal/ui/messages"
+	"github.com/caballero77/dctop/internal/utils/queues"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -107,12 +108,18 @@ func convertToBrailleRuneIndex[T constraints.Float](value, scale T) (index int, 
 		return 4, value - 4*scale
 	}
 
-	index = int(math.Floor(float64(value / scale)))
+	index = int(value / scale)
 	if value >= 0.0001 && index == 0 {
 		index = 1
 	}
 
-	return min(max(index, 0), 4), 0
+	if index < 0 {
+		index = 0
+	} else if index > 4 {
+		index = 4
+	}
+
+	return index, 0
 }
 
 func drawPlotWithGradient(lines []string, start, end lipgloss.Color) []string {
