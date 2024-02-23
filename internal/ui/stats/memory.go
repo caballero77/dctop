@@ -19,9 +19,8 @@ type memory struct {
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 
-	memoryPlots    map[string]plotting.Plot[float64]
-	memoryUsages   map[string]uint
-	maxMemoryUsage map[string]uint
+	memoryPlots  map[string]plotting.Plot[float64]
+	memoryUsages map[string]uint
 
 	containerID string
 	memoryLimit uint64
@@ -33,12 +32,11 @@ type memory struct {
 
 func newMemory(theme configuration.Theme) tea.Model {
 	model := memory{
-		plotColor:      plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
-		labelStyle:     lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
-		legendStyle:    lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		memoryPlots:    make(map[string]plotting.Plot[float64]),
-		maxMemoryUsage: make(map[string]uint),
-		memoryUsages:   make(map[string]uint),
+		plotColor:    plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
+		labelStyle:   lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
+		legendStyle:  lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
+		memoryPlots:  make(map[string]plotting.Plot[float64]),
+		memoryUsages: make(map[string]uint),
 	}
 
 	return helpers.NewBox(model, theme.Sub("border"))
@@ -96,14 +94,12 @@ func (model *memory) handleContainersUpdates(msg docker.ContainerMsg) {
 			memoryPlot, ok := model.memoryPlots[msg.Inspect.ID]
 			if !ok {
 				memoryPlot = model.createNewPlot()
-				model.memoryPlots[msg.Inspect.ID] = memoryPlot
 			}
 			usage := model.calculateMemoryUsage(msg.Stats)
 			model.memoryUsages[msg.Inspect.ID] = usage
-			if model.maxMemoryUsage[msg.Inspect.ID] < usage {
-				model.maxMemoryUsage[msg.Inspect.ID] = usage
-			}
-			memoryPlot.Push(100 * float64(usage) / float64(model.maxMemoryUsage[msg.Inspect.ID]))
+
+			memoryPlot.Push(float64(usage))
+			model.memoryPlots[msg.Inspect.ID] = memoryPlot
 		}
 	case docker.ContainerRemoveMsg:
 		delete(model.memoryPlots, msg.ID)
@@ -126,7 +122,7 @@ func (memory) calculateMemoryUsage(currentStats docker.ContainerStats) uint {
 }
 
 func (model memory) createNewPlot() plotting.Plot[float64] {
-	memoryPlot := plotting.New[float64](func(_ float64) float64 { return 1.6 }, model.plotColor)
+	memoryPlot := plotting.New[float64](model.plotColor)
 	memoryPlot.SetSize(model.width-2, model.height-2)
 	return memoryPlot
 }

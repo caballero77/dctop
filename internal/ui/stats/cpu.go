@@ -2,7 +2,6 @@ package stats
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/caballero77/dctop/internal/configuration"
 	"github.com/caballero77/dctop/internal/docker"
@@ -17,8 +16,7 @@ import (
 type cpu struct {
 	cpuPlots map[string]plotting.Plot[float64]
 
-	cpuUsages    map[string]float64
-	maxCPUUsages map[string]float64
+	cpuUsages map[string]float64
 
 	plotColor   plotting.ColorGradient
 	labelStyle  lipgloss.Style
@@ -34,9 +32,8 @@ type cpu struct {
 
 func newCPU(theme configuration.Theme) tea.Model {
 	model := cpu{
-		cpuPlots:     make(map[string]plotting.Plot[float64]),
-		cpuUsages:    make(map[string]float64),
-		maxCPUUsages: make(map[string]float64),
+		cpuPlots:  make(map[string]plotting.Plot[float64]),
+		cpuUsages: make(map[string]float64),
 
 		plotColor:   plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
@@ -60,16 +57,7 @@ func (model cpu) Labels() []string {
 	return []string{model.labelStyle.Render(fmt.Sprintf("cpu: %.2f", cpuUsage) + "%")}
 }
 
-func (model cpu) Legends() []string {
-	maxCPUUsage, ok := model.maxCPUUsages[model.containerID]
-	if !ok {
-		return []string{}
-	}
-
-	scale := model.calculateScalingCoefficient(maxCPUUsage)
-
-	return []string{model.legendStyle.Render(fmt.Sprintf("scale: %d", int(math.Round(scale*100))) + "%")}
-}
+func (cpu) Legends() []string { return []string{} }
 
 func (model cpu) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return model.UpdateAsBoxed(msg) }
 
@@ -113,10 +101,8 @@ func (model *cpu) handleContainersUpdates(msg docker.ContainerMsg) {
 			if ok {
 				usage := model.calculateCPUUsage(msg.Stats.CPUStats, prevStats)
 				model.cpuUsages[msg.Inspect.ID] = usage
-				if model.maxCPUUsages[msg.Inspect.ID] < usage {
-					model.maxCPUUsages[msg.Inspect.ID] = usage
-				}
-				cpuPlot.Push(usage)
+
+				cpuPlot.Push(min(usage, 100))
 			}
 
 			model.prevContainerStats[msg.Inspect.ID] = msg.Stats.CPUStats
@@ -138,15 +124,6 @@ func (model cpu) View() string {
 	return cpuPlot.View()
 }
 
-func (model cpu) calculateScalingCoefficient(maxValue float64) float64 {
-	for i := 0; i < len(model.scaling); i++ {
-		if maxValue < float64(model.scaling[i]) {
-			return float64(model.scaling[i]) / 100
-		}
-	}
-	return 1
-}
-
 func (cpu) calculateCPUUsage(currentStats, prevStats docker.CPUStats) float64 {
 	var (
 		cpuPercent  = 0.0
@@ -162,7 +139,7 @@ func (cpu) calculateCPUUsage(currentStats, prevStats docker.CPUStats) float64 {
 }
 
 func (model cpu) createNewPlot() plotting.Plot[float64] {
-	plot := plotting.New[float64](model.calculateScalingCoefficient, model.plotColor)
+	plot := plotting.New[float64](model.plotColor)
 	plot.SetSize(model.width-2, model.height-2)
 	return plot
 }

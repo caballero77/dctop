@@ -29,7 +29,6 @@ type ColorGradient struct {
 
 type Plot[T constraints.Float] struct {
 	data     *queues.Queue[T]
-	scale    func(T) T
 	maxValue T
 
 	color ColorGradient
@@ -38,10 +37,9 @@ type Plot[T constraints.Float] struct {
 	height int
 }
 
-func New[T constraints.Float](scale func(T) T, gradient ColorGradient) Plot[T] {
+func New[T constraints.Float](gradient ColorGradient) Plot[T] {
 	return Plot[T]{
 		data:  queues.New[T](),
-		scale: scale,
 		color: gradient,
 	}
 }
@@ -67,8 +65,7 @@ func (model Plot[T]) View() string {
 	data := model.data.ToArray()
 	plot := make([]string, model.height)
 
-	scale := model.scale(model.maxValue)
-	k := scale * 100 / T(model.height*4)
+	k := 100 / T(model.height*4)
 
 	for i := 0; i < len(data) && i/2 < model.width; i += 2 {
 		cpuX, cpuY := 100*data[i]/model.maxValue, T(0.0)
