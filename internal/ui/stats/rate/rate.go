@@ -6,7 +6,7 @@ import (
 	"github.com/caballero77/dctop/internal/configuration"
 	"github.com/caballero77/dctop/internal/ui/helpers"
 	"github.com/caballero77/dctop/internal/ui/messages"
-	"github.com/caballero77/dctop/internal/ui/stats/drawing/plotting"
+	"github.com/caballero77/dctop/internal/ui/stats/drawing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -19,7 +19,7 @@ type number interface {
 }
 
 type Model[T number] struct {
-	plot plotting.Plot[float64]
+	plot drawing.Plot[float64]
 
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
@@ -41,7 +41,7 @@ func New[T number](name string, theme configuration.Theme) tea.Model {
 		name:        name,
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		plot:        plotting.New[float64](plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")}),
+		plot:        drawing.New[float64](drawing.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")}),
 	}
 
 	return helpers.NewBox(model, theme.Sub("border"))

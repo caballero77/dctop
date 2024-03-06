@@ -1,8 +1,6 @@
-package plotting
+package drawing
 
 import (
-	"fmt"
-	"image/color"
 	"log/slog"
 	"slices"
 
@@ -68,16 +66,16 @@ func (model Plot[T]) View() string {
 	k := 100 / T(model.height*4)
 
 	for i := 0; i < len(data) && i/2 < model.width; i += 2 {
-		cpuX, cpuY := 100*data[i]/model.maxValue, T(0.0)
+		firstSegment, secondSegment := 100*data[i]/model.maxValue, T(0.0)
 		if i+1 < len(data) {
-			cpuY = 100 * data[i+1] / model.maxValue
+			secondSegment = 100 * data[i+1] / model.maxValue
 		}
 
 		for i := 0; i < len(plot); i++ {
 			var x, y int
 
-			x, cpuX = convertToBrailleRuneIndex(cpuX, k)
-			y, cpuY = convertToBrailleRuneIndex(cpuY, k)
+			x, firstSegment = convertToBrailleRuneIndex(firstSegment, k)
+			y, secondSegment = convertToBrailleRuneIndex(secondSegment, k)
 
 			plot[i] += braille[x][y]
 		}
@@ -99,6 +97,7 @@ func (model *Plot[T]) SetSize(width, height int) {
 	model.height = height
 }
 
+// Adds a new value to the Plot
 func (model *Plot[T]) Push(value T) {
 	err := model.data.PushWithLimit(value, model.width*2)
 	if err != nil {
@@ -114,6 +113,7 @@ func (model *Plot[T]) Push(value T) {
 	model.maxValue = maxValue
 }
 
+// Is a Go function that converts a value to a Braille Rune index.
 func convertToBrailleRuneIndex[T constraints.Float](value, scale T) (index int, adjustedValue T) {
 	if value >= 4*scale {
 		return 4, value - 4*scale
@@ -131,36 +131,4 @@ func convertToBrailleRuneIndex[T constraints.Float](value, scale T) (index int, 
 	}
 
 	return index, 0
-}
-
-func generateColorGradient(start, end lipgloss.Color, numSteps int) []lipgloss.Color {
-	color1 := lipglossToRGBA(start)
-	color2 := lipglossToRGBA(end)
-
-	gradient := make([]lipgloss.Color, numSteps)
-	rStep := float64(color2.R-color1.R) / float64(numSteps-1)
-	gStep := float64(color2.G-color1.G) / float64(numSteps-1)
-	bStep := float64(color2.B-color1.B) / float64(numSteps-1)
-	aStep := float64(color2.A-color1.A) / float64(numSteps-1)
-
-	for i := 0; i < numSteps; i++ {
-		r := uint8(float64(color1.R) + float64(i)*rStep)
-		g := uint8(float64(color1.G) + float64(i)*gStep)
-		b := uint8(float64(color1.B) + float64(i)*bStep)
-		a := uint8(float64(color1.A) + float64(i)*aStep)
-		gradient[i] = lipgloss.Color(fmt.Sprintf("#%02x%02x%02x%02x", r, g, b, a))
-	}
-
-	return gradient
-}
-
-func lipglossToRGBA(lipglossColor lipgloss.Color) color.RGBA {
-	r, g, b, a := lipglossColor.RGBA()
-
-	return color.RGBA{
-		R: uint8(r),
-		G: uint8(g),
-		B: uint8(b),
-		A: uint8(a),
-	}
 }

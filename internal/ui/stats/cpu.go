@@ -7,18 +7,18 @@ import (
 	"github.com/caballero77/dctop/internal/docker"
 	"github.com/caballero77/dctop/internal/ui/helpers"
 	"github.com/caballero77/dctop/internal/ui/messages"
-	"github.com/caballero77/dctop/internal/ui/stats/drawing/plotting"
+	"github.com/caballero77/dctop/internal/ui/stats/drawing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type cpu struct {
-	cpuPlots map[string]plotting.Plot[float64]
+	cpuPlots map[string]drawing.Plot[float64]
 
 	cpuUsages map[string]float64
 
-	plotColor   plotting.ColorGradient
+	plotColor   drawing.ColorGradient
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 	scaling     []int
@@ -32,10 +32,10 @@ type cpu struct {
 
 func newCPU(theme configuration.Theme) tea.Model {
 	model := cpu{
-		cpuPlots:  make(map[string]plotting.Plot[float64]),
+		cpuPlots:  make(map[string]drawing.Plot[float64]),
 		cpuUsages: make(map[string]float64),
 
-		plotColor:   plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
+		plotColor:   drawing.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
 		labelStyle:  lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle: lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
 
@@ -138,8 +138,8 @@ func (cpu) calculateCPUUsage(currentStats, prevStats docker.CPUStats) float64 {
 	return cpuPercent
 }
 
-func (model cpu) createNewPlot() plotting.Plot[float64] {
-	plot := plotting.New[float64](model.plotColor)
+func (model cpu) createNewPlot() drawing.Plot[float64] {
+	plot := drawing.New[float64](model.plotColor)
 	plot.SetSize(model.width-2, model.height-2)
 	return plot
 }

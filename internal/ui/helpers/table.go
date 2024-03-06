@@ -1,8 +1,9 @@
 package helpers
 
 import (
-	"github.com/caballero77/dctop/internal/configuration"
 	"strings"
+
+	"github.com/caballero77/dctop/internal/configuration"
 
 	"github.com/charmbracelet/lipgloss"
 )

@@ -7,7 +7,7 @@ import (
 	"github.com/caballero77/dctop/internal/docker"
 	"github.com/caballero77/dctop/internal/ui/helpers"
 	"github.com/caballero77/dctop/internal/ui/messages"
-	"github.com/caballero77/dctop/internal/ui/stats/drawing/plotting"
+	"github.com/caballero77/dctop/internal/ui/stats/drawing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -15,11 +15,11 @@ import (
 )
 
 type memory struct {
-	plotColor   plotting.ColorGradient
+	plotColor   drawing.ColorGradient
 	labelStyle  lipgloss.Style
 	legendStyle lipgloss.Style
 
-	memoryPlots  map[string]plotting.Plot[float64]
+	memoryPlots  map[string]drawing.Plot[float64]
 	memoryUsages map[string]uint
 
 	containerID string
@@ -32,10 +32,10 @@ type memory struct {
 
 func newMemory(theme configuration.Theme) tea.Model {
 	model := memory{
-		plotColor:    plotting.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
+		plotColor:    drawing.ColorGradient{From: theme.GetColor("plot.from"), To: theme.GetColor("plot.to")},
 		labelStyle:   lipgloss.NewStyle().Bold(true).Foreground(theme.GetColor("title.plain")),
 		legendStyle:  lipgloss.NewStyle().Foreground(theme.GetColor("legend.plain")),
-		memoryPlots:  make(map[string]plotting.Plot[float64]),
+		memoryPlots:  make(map[string]drawing.Plot[float64]),
 		memoryUsages: make(map[string]uint),
 	}
 
@@ -121,8 +121,8 @@ func (memory) calculateMemoryUsage(currentStats docker.ContainerStats) uint {
 	return uint(currentStats.MemoryStats.Usage - currentStats.MemoryStats.Stats.Cache)
 }
 
-func (model memory) createNewPlot() plotting.Plot[float64] {
-	memoryPlot := plotting.New[float64](model.plotColor)
+func (model memory) createNewPlot() drawing.Plot[float64] {
+	memoryPlot := drawing.New[float64](model.plotColor)
 	memoryPlot.SetSize(model.width-2, model.height-2)
 	return memoryPlot
 }

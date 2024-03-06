@@ -47,7 +47,7 @@ func (queue *Queue[T]) Pop() (T, error) {
 	return value, nil
 }
 
-func (queue Queue[T]) Head() (T, error) {
+func (queue Queue[T]) Last() (T, error) {
 	var value T
 	if queue.Len() == 0 {
 		return value, errors.New("can't pop value from empty queue")

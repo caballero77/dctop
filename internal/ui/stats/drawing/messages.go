@@ -1,4 +1,4 @@
-package plotting
+package drawing
 
 import "golang.org/x/exp/constraints"
 
