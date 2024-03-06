@@ -91,17 +91,14 @@ func TestPlotPush(t *testing.T) {
 				plot.Push(v)
 			}
 
-			actual := plot.data.ToArray()
-
-			if len(actual) != len(testCases.expected) {
-				t.Errorf("unexpected length, got: %v, expected: %v", len(actual), len(testCases.expected))
-				return
-			}
-
-			for i, v := range actual {
-				if v != testCases.expected[i] {
-					t.Errorf("unexpected value, got: %v, expected: %v", v, testCases.expected[i])
+			for e, i := plot.data.Back(), 0; e != nil; e = e.Prev() {
+				value, ok := e.Value.(float64)
+				if ok {
+					if value != testCases.expected[i] {
+						t.Errorf("unexpected value, got: %v, expected: %v", value, testCases.expected[i])
+					}
 				}
+				i++
 			}
 
 			if plot.maxValue != testCases.expectedMax {

@@ -3,6 +3,7 @@ package stack
 import (
 	"fmt"
 	"log/slog"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/caballero77/dctop/internal/docker"
 	"github.com/caballero77/dctop/internal/ui/helpers"
 	"github.com/caballero77/dctop/internal/ui/messages"
-	"github.com/caballero77/dctop/internal/utils"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -167,7 +167,7 @@ func (model containersList) View() string {
 
 		stack := model.containersService.Stack()
 		items[i] = []string{
-			utils.DisplayContainerName(container.InspectData.Name, stack),
+			displayContainerName(container.InspectData.Name, stack),
 			container.InspectData.Config.Image,
 			container.InspectData.State.Status,
 			ipAddress,
@@ -356,4 +356,10 @@ func (containersList) calculateCPUUsage(currentStats, prevStats docker.Container
 	}
 
 	return cpuPercent
+}
+
+func displayContainerName(name, stack string) string {
+	reg := regexp.MustCompile(fmt.Sprintf("/?(%s-)?(?P<name>[a-zA-Z0-9]+(-[0-9]+)?)", stack))
+	index := reg.SubexpIndex("name")
+	return reg.FindStringSubmatch(name)[index]
 }

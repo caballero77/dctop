@@ -87,9 +87,11 @@ func (model inspect) UpdateAsBoxed(msg tea.Msg) (helpers.BoxedModel, tea.Cmd) {
 			}
 		}
 	case docker.ContainerMsg:
-		model, cmd = model.handleContainersUpdates(msg)
-		if cmd != nil {
-			commands = append(commands, cmd)
+		if model.focus {
+			model, cmd = model.handleContainersUpdates(msg)
+			if cmd != nil {
+				commands = append(commands, cmd)
+			}
 		}
 	case messages.ContainerSelectedMsg:
 		if model.selectedContainer != msg.Container.InspectData.ID {

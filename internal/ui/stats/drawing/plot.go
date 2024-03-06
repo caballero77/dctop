@@ -1,11 +1,10 @@
 package drawing
 
 import (
-	"log/slog"
+	"container/list"
 	"slices"
 
 	"github.com/caballero77/dctop/internal/ui/messages"
-	"github.com/caballero77/dctop/internal/utils/queues"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -26,7 +25,7 @@ type ColorGradient struct {
 }
 
 type Plot[T constraints.Float] struct {
-	data     *queues.Queue[T]
+	data     *list.List
 	maxValue T
 
 	color ColorGradient
@@ -37,7 +36,7 @@ type Plot[T constraints.Float] struct {
 
 func New[T constraints.Float](gradient ColorGradient) Plot[T] {
 	return Plot[T]{
-		data:  queues.New[T](),
+		data:  list.New(),
 		color: gradient,
 	}
 }
@@ -60,16 +59,26 @@ func (model Plot[T]) View() string {
 		return lipgloss.Place(model.width, model.height, lipgloss.Center, lipgloss.Center, "no data")
 	}
 
-	data := model.data.ToArray()
 	plot := make([]string, model.height)
 
 	k := 100 / T(model.height*4)
-
-	for i := 0; i < len(data) && i/2 < model.width; i += 2 {
-		firstSegment, secondSegment := 100*data[i]/model.maxValue, T(0.0)
-		if i+1 < len(data) {
-			secondSegment = 100 * data[i+1] / model.maxValue
+	for e := model.data.Back(); e != nil; e = e.Prev() {
+		value, ok := e.Value.(T)
+		if !ok {
+			value = 0
 		}
+		firstSegment := 100 * value / model.maxValue
+
+		e = e.Prev()
+		if e != nil {
+			value, ok = e.Value.(T)
+			if !ok {
+				value = 0
+			}
+		} else {
+			value = 0
+		}
+		secondSegment := 100 * value / model.maxValue
 
 		for i := 0; i < len(plot); i++ {
 			var x, y int
@@ -78,6 +87,10 @@ func (model Plot[T]) View() string {
 			y, secondSegment = convertToBrailleRuneIndex(secondSegment, k)
 
 			plot[i] += braille[x][y]
+		}
+
+		if e == nil {
+			break
 		}
 	}
 
@@ -97,18 +110,19 @@ func (model *Plot[T]) SetSize(width, height int) {
 	model.height = height
 }
 
-// Adds a new value to the Plot
+// Adds a new value to the Plot.
 func (model *Plot[T]) Push(value T) {
-	err := model.data.PushWithLimit(value, model.width*2)
-	if err != nil {
-		slog.Error("Error adding new value to plot",
-			"limit", model.width*2,
-			"error", err)
+	model.data.PushBack(value)
+	if model.width*2 >= 0 && model.data.Len() > model.width*2 {
+		model.data.Remove(model.data.Front())
 	}
 
 	var maxValue T
-	for _, item := range model.data.ToArray() {
-		maxValue = max(maxValue, item)
+	for e := model.data.Back(); e != nil; e = e.Prev() {
+		value, ok := e.Value.(T)
+		if ok {
+			maxValue = max(maxValue, value)
+		}
 	}
 	model.maxValue = maxValue
 }
